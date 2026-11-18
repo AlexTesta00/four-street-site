@@ -19,8 +19,8 @@ $units = [
     ['secondi', 'Secondi', $left % 60],
 ];
 
-$liveTitle = $eventOver ? '4Street — Siamo aperti' : '4Street — Ci siamo';
-$pageTitle = $isLive ? $liveTitle : '4Street — Apriamo ' . $dateShort;
+$liveTitle = $eventOver ? '4Street · Siamo aperti' : '4Street · Ci siamo';
+$pageTitle = $isLive ? $liveTitle : '4Street · Apriamo ' . $dateShort;
 $pageDescription = $isLive
     ? '4Street, palestra a San Marino. Ti aspettiamo in ' . $address . '.'
     : '4Street, palestra a San Marino. Inaugurazione ' . $dateShort . ' in ' . $address . '.';
@@ -97,10 +97,7 @@ foreach ($units as $index => $unit):
             </a>
 <?php endif; ?>
           </div>
-          <div class="fs-anim-fade fs-step-11 flex max-w-[560px] flex-col gap-2 text-sm leading-5">
-            <p class="text-fg-muted"><?= e($dateLong) ?><?= $time !== '' ? ' · ore ' . e($time) : '' ?> · <?= e($address) ?></p>
-            <p class="text-fg-subtle">Allo zero, qui compare la mappa per raggiungerci.</p>
-          </div>
+          <p class="fs-anim-fade fs-step-11 max-w-[560px] text-sm leading-5 text-fg-muted"><?= e($dateLong) ?><?= $time !== '' ? ' · ore ' . e($time) : '' ?> · <?= e($address) ?></p>
         </div>
 
       </div>

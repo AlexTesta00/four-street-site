@@ -18,7 +18,7 @@ if ($left >= 86400) {
     $leftUnit = $leftValue === 1 ? 'ora' : 'ore';
 }
 
-$pageTitle = '4Street — Link';
+$pageTitle = '4Street · Link';
 $pageDescription = 'Tutti i link di 4Street, palestra a San Marino.';
 
 require dirname(__DIR__) . '/_inc/head.php';
