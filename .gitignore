@@ -10,3 +10,6 @@ Thumbs.db
 
 # Dipendenze e build locali
 node_modules/
+
+# CSS generato da Tailwind (lo costruisce il deploy)
+public/assets/css/app.css

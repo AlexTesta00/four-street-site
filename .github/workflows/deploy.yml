@@ -1,6 +1,7 @@
 name: Deploy su Hostinger
 
-# Carica il contenuto di ./public dentro la cartella public_html già esistente su Hostinger.
+# Costruisce il CSS con Tailwind e carica il contenuto di ./public dentro la cartella
+# public_html già esistente su Hostinger.
 # Il deploy è incrementale: l'action tiene sul server un file di stato
 # (.ftp-deploy-sync-state.json) e a ogni run carica solo i file nuovi o modificati
 # ed elimina solo quelli che lei stessa aveva caricato e che sono stati rimossi dalla repo.
@@ -11,6 +12,9 @@ on:
     branches: [main]
     paths:
       - "public/**"
+      - "src/**"
+      - "package.json"
+      - "package-lock.json"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -31,6 +35,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build del CSS (Tailwind)
+        run: |
+          npm ci
+          npm run build
 
       - name: Sync incrementale via FTPS
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
