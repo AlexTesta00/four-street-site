@@ -1,0 +1,12 @@
+# Credenziali: mai nella repo (pubblica)
+.env
+.env.*
+!.env.example
+
+# Sistema operativo
+desktop.ini
+Thumbs.db
+.DS_Store
+
+# Dipendenze e build locali
+node_modules/
