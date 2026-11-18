@@ -21,5 +21,5 @@ return [
     ],
 
     // Indirizzo pubblico del sito, senza barra finale (serve per le anteprime social).
-    'site_url' => '',
+    'site_url' => 'https://fourstreet.studio',
 ];
