@@ -16,8 +16,8 @@ return [
 
     // I link vuoti non vengono pubblicati.
     'links' => [
-        'instagram' => '',
-        'whatsapp' => '',
+        'instagram' => 'https://www.instagram.com/4ndrew_sw',
+        'whatsapp' => 'https://wa.me/393662546495',
     ],
 
     // Indirizzo pubblico del sito, senza barra finale (serve per le anteprime social).
