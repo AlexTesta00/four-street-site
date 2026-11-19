@@ -60,9 +60,7 @@ require __DIR__ . '/_inc/head.php';
             <span class="fs-tag fs-tag--event"><?= e($dateTag) ?></span>
             <span class="fs-label text-fg-subtle">Inaugurazione<span class="hidden md:inline"> · San Marino</span></span>
           </div>
-          <h1 class="fs-anim-rise fs-step-3 max-w-[680px] text-balance font-display text-[40px] font-normal leading-[44px] tracking-[-0.015em] md:text-[clamp(40px,4.45vw,64px)] md:leading-[1.0625]">Apriamo <?= e($dateShort) ?>.</h1>
-          <p class="fs-anim-rise fs-step-4 max-w-[560px] text-lg leading-7 text-fg-muted">Cinque persone per fascia oraria. Non una di più.</p>
-        </div>
+          <h1 class="fs-anim-rise fs-step-3 max-w-[680px] text-balance font-display text-[40px] font-normal leading-[44px] tracking-[-0.015em] md:text-[clamp(40px,4.45vw,64px)] md:leading-[1.0625]">Apriamo <?= e($dateShort) ?>.</h1>        </div>
 
         <div class="fs-cd-box">
           <div class="fs-cd" role="timer" aria-label="Conto alla rovescia per l'inaugurazione">
