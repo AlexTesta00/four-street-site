@@ -16,7 +16,7 @@ return [
 
     // I link vuoti non vengono pubblicati.
     'links' => [
-        'instagram' => 'https://www.instagram.com/4ndrew_sw',
+        'instagram' => 'https://www.instagram.com/4street_sw',
         'whatsapp' => 'https://wa.me/393662546495',
     ],
 

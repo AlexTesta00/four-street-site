@@ -103,7 +103,6 @@ require dirname(__DIR__) . '/_inc/head.php';
             <?= fs_icon('calendar', 'fs-link__icon') ?>
             <span class="fs-link__body">
               <span class="fs-title-caps">Prenotazioni</span>
-              <span class="fs-link__meta">Massimo cinque persone</span>
             </span>
             <span class="fs-tag flex-none">Presto</span>
           </div>
