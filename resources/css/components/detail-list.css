@@ -22,4 +22,9 @@
     line-height: 24px;
     overflow-wrap: anywhere;
   }
+  /* Etichette lunghe ("Inaugurazione"): colonna più larga */
+  .fs-dl--wide > .fs-dl__row {
+    grid-template-columns: 152px minmax(0, 1fr);
+    gap: 16px;
+  }
 }

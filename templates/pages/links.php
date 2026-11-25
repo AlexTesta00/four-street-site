@@ -21,6 +21,7 @@ $view->layout('layouts/base', [
     'title' => '4Street · Link',
     'description' => 'Tutti i link di 4Street, palestra a San Marino.',
     'siteUrl' => $site->siteUrl,
+    'structuredData' => null,
 ]);
 
 // L'inaugurazione: lo stato quando è iniziata, altrimenti quanto manca.
@@ -53,7 +54,7 @@ $cards[] = ['icon' => 'bag', 'title' => 'Shop', 'meta' => 'Vendita online', 'hre
   <div class="mx-auto flex w-full max-w-[1280px] flex-col gap-8 pb-10 sm:max-w-[560px] sm:px-5 sm:pt-10 lg:max-w-[1280px] lg:flex-row lg:items-center lg:justify-center lg:gap-24 lg:px-[var(--gutter)] lg:py-[72px]">
 
     <div class="flex min-w-0 flex-col gap-6 lg:max-w-full lg:flex-[0_1_480px]">
-      <?= $view->partial('partials/logo', ['figureClass' => 'aspect-[16/10] w-full lg:aspect-square', 'imageClass' => 'lg:object-center']) ?>
+      <?= $view->partial('partials/logo', ['figureClass' => 'aspect-[16/10] w-full lg:aspect-square', 'imageClass' => 'lg:object-center', 'priority' => true]) ?>
       <div class="px-5 sm:px-0">
         <h1 class="sr-only">4Street</h1>
         <span class="fs-label fs-anim-rise fs-step-3 block text-fg-subtle">Palestra · San Marino</span>

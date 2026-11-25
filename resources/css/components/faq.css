@@ -1,0 +1,45 @@
+/* ---------- Domande frequenti ----------
+   details e summary del browser: si aprono con il mouse e da tastiera, anche senza JavaScript. */
+
+@layer components {
+  .fs-faq {
+    border-top: 1px solid var(--color-hairline);
+  }
+  .fs-faq__item {
+    border-bottom: 1px solid var(--color-hairline);
+  }
+  .fs-faq__question {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 64px;
+    padding: 18px 0;
+    list-style: none;
+    cursor: pointer;
+  }
+  .fs-faq__question::-webkit-details-marker {
+    display: none;
+  }
+  .fs-faq__icon {
+    width: 20px;
+    height: 20px;
+    flex: none;
+    color: var(--color-fg-muted);
+    transition: color var(--duration-fast) var(--ease-out-soft);
+  }
+  .fs-faq__question:hover .fs-faq__icon {
+    color: var(--color-fg);
+  }
+  /* Con la risposta aperta il più diventa meno: sparisce il tratto verticale dell'icona */
+  .fs-faq__icon > path:last-child {
+    transition: opacity var(--duration-fast) var(--ease-out-soft);
+  }
+  .fs-faq__item[open] .fs-faq__icon > path:last-child {
+    opacity: 0;
+  }
+  .fs-faq__answer {
+    padding: 0 36px 24px 0;
+    color: var(--color-fg-muted);
+  }
+}

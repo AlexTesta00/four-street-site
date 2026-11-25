@@ -1,0 +1,27 @@
+/* ---------- Cromo ----------
+   Il materiale delle lettere del logo, sulle cifre grandi: il gradiente metal-chrome dentro il testo
+   e, come primo livello di sfondo, una banda di luce che fs-anim-sheen fa scorrere da destra a sinistra. */
+
+@layer components {
+  .fs-chrome {
+    background-image:
+      linear-gradient(
+        90deg,
+        transparent 36%,
+        rgba(255, 255, 255, 0.92) 47%,
+        rgba(255, 255, 255, 0.92) 53%,
+        transparent 64%
+      ),
+      var(--metal-chrome);
+    background-size:
+      400% 100%,
+      100% 100%;
+    background-repeat: no-repeat;
+    background-position:
+      100% 0,
+      0 0;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}

@@ -1,0 +1,10 @@
+/* ---------- Pannello ----------
+   Superficie rialzata su panel, con il riflesso di 1px in alto. Un solo livello: mai un panel dentro un panel. */
+
+@layer components {
+  .fs-panel {
+    background: var(--color-panel);
+    border: 1px solid var(--color-hairline-strong);
+    box-shadow: var(--edge);
+  }
+}

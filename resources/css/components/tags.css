@@ -30,4 +30,25 @@
     border-radius: 9999px;
     background: var(--color-accent);
   }
+  /* Dato che manca: filetto tratteggiato e testo tra parentesi quadre, in tondo.
+     Può andare a capo, così un segnaposto lungo non esce mai dallo schermo. */
+  .fs-tag--placeholder {
+    height: auto;
+    min-height: 24px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    border-style: dashed;
+    border-color: var(--color-control);
+    color: var(--color-fg-muted);
+    text-transform: none;
+    white-space: normal;
+  }
+  /* Lo stesso segnaposto dentro una frase: il filetto segue il testo anche quando va a capo */
+  .fs-ph {
+    padding: 0 6px;
+    border: 1px dashed var(--color-control);
+    color: var(--color-fg-muted);
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
 }

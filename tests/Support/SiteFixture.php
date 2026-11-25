@@ -38,6 +38,20 @@ final class SiteFixture
                 'whatsapp' => 'https://wa.me/393662546495',
             ],
             'site_url' => 'https://fourstreet.studio',
+            'show_placeholders' => true,
+            'content' => [
+                'hours' => '',
+                'prices' => '',
+                'room' => '',
+                'photos' => ['room' => null, 'entrance' => null, 'detail' => null],
+                'privacy_url' => '',
+                'company' => '',
+            ],
+            'booking' => [
+                'capacity' => 5,
+                'example_slots' => ['07:00' => 2, '09:30' => 4, '12:30' => 1, '17:30' => 5, '18:30' => 3, '20:00' => 0],
+                'default_slot' => '18:30',
+            ],
         ];
     }
 

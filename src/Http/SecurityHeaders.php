@@ -43,23 +43,20 @@ final readonly class SecurityHeaders
     }
 
     /**
-     * Solo ciò che le pagine usano davvero: script e stili nostri, Google Fonts, la mappa di Google.
+     * Solo ciò che le pagine usano davvero: script e stili nostri, Google Fonts. Niente in linea:
+     * nessun <style>, nessun attributo style, nessuno script scritto nella pagina.
      */
     private static function contentSecurityPolicy(): string
     {
         return implode('; ', [
             "default-src 'self'",
             "script-src 'self'",
-            // Fogli di stile: il nostro e quello di Google Fonts, niente <style> in pagina.
-            "style-src-elem 'self' https://fonts.googleapis.com",
-            // Gli attributi style del countdown (--sheen-delay, il ritardo del riflesso sulle cifre).
-            "style-src-attr 'unsafe-inline'",
-            // Per i browser senza CSP 3, che non conoscono le due direttive qui sopra.
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+            // Fogli di stile: il nostro e quello di Google Fonts.
+            "style-src 'self' https://fonts.googleapis.com",
             "font-src 'self' https://fonts.gstatic.com",
             "img-src 'self'",
-            // La mappa incorporata nello stato "Ci siamo".
-            'frame-src https://www.google.com',
+            // La mappa è un disegno della pagina: nessun sito incorporato.
+            "frame-src 'none'",
             "object-src 'none'",
             "base-uri 'self'",
             "form-action 'self'",

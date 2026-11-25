@@ -1,4 +1,6 @@
-/* ---------- MapPanel ---------- */
+/* ---------- MapPanel ----------
+   La mappa illustrata: strade scure, la corsia tratteggiata che scorre verso il pin, il percorso oro.
+   È un disegno, non la geografia reale: lo dice il tag "Mappa illustrativa". */
 
 @layer components {
   .fs-map {
@@ -7,27 +9,42 @@
     background: var(--color-panel);
     border: 1px solid var(--color-hairline-strong);
   }
-  /* Mappa reale resa scura per stare nel sistema; non interattiva: si apre dai bottoni */
-  /* L'iframe sporge di 120px in alto per lasciare fuori la scheda di Google (non cliccabile qui);
-     i crediti della mappa in basso restano visibili. Il pin segue lo stesso spostamento. */
-  .fs-map__frame {
+  .fs-map__art {
     position: absolute;
-    left: 0;
-    top: -120px;
+    inset: 0;
+    display: block;
     width: 100%;
-    height: calc(100% + 120px);
-    border: 0;
-    pointer-events: none;
-    filter: grayscale(1) invert(0.92) contrast(0.88) brightness(0.92);
+    height: 100%;
+  }
+  /* Le strade si distinguono per spessore, non per colore */
+  .fs-map__street {
+    fill: none;
+    stroke: var(--color-hairline-strong);
+    stroke-linecap: square;
+  }
+  .fs-map__lane {
+    fill: none;
+    stroke: var(--color-fg-subtle);
+    stroke-width: 1.5;
+    stroke-dasharray: 10 14;
+  }
+  /* Il percorso ha pathLength="1": un solo tratto lungo quanto lui */
+  .fs-map__route {
+    fill: none;
+    stroke: var(--color-accent);
+    stroke-width: 3;
+    stroke-linecap: square;
+    stroke-dasharray: 1;
   }
   .fs-map__pin {
-    position: absolute;
-    left: 50%;
-    top: calc(50% - 60px);
-    width: 120px;
-    height: 120px;
-    margin: -60px 0 0 -60px;
-    pointer-events: none;
+    fill: var(--color-accent);
+    stroke: var(--color-canvas);
+    stroke-width: 3;
+  }
+  .fs-map__halo {
+    fill: none;
+    stroke: var(--color-accent-line);
+    stroke-width: 1.5;
   }
   .fs-map__chip {
     position: absolute;
@@ -40,5 +57,34 @@
     padding: 12px 16px;
     background: var(--color-canvas);
     border: 1px solid var(--color-hairline-strong);
+  }
+  /* In basso a destra su mobile, lontano dal percorso; in alto a destra da lg */
+  .fs-map__flag {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+  }
+  @media (min-width: 1024px) {
+    .fs-map__flag {
+      top: 16px;
+      bottom: auto;
+    }
+  }
+
+  /* Il percorso si disegna fino al pin quando la mappa entra nello schermo: legato allo scorrimento
+     dove il browser lo sa fare, altrimenti lo avvia lo script (is-entering, vedi reveal.css).
+     Fermo, il percorso è già tutto disegnato. */
+  @supports (animation-timeline: view()) {
+    .fs-map {
+      view-timeline-name: --fs-map;
+    }
+    .fs-map__route {
+      animation: fs-draw linear both;
+      animation-timeline: --fs-map;
+      animation-range: entry 10% entry 100%;
+    }
+  }
+  .fs-map.is-entering .fs-map__route {
+    animation: fs-draw var(--duration-draw) var(--ease-in-out-soft) var(--duration-base) backwards;
   }
 }

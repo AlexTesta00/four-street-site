@@ -1,0 +1,41 @@
+/* ---------- Comparsa allo scorrimento ----------
+   Le parti più in basso della pagina salgono quando entrano nello schermo. Dove il browser sa legare
+   un'animazione allo scorrimento (animation-timeline: view()) lo fa il CSS da solo. Negli altri browser
+   lo script nasconde (is-waiting) solo ciò che all'apertura sta sotto il bordo dello schermo e lo fa
+   entrare (is-entering) quando arriva. Senza script, o con il movimento ridotto, tutto è già al suo posto. */
+
+@layer components {
+  @supports (animation-timeline: view()) {
+    .fs-reveal {
+      animation: fs-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 35%;
+    }
+    /* Il logo si scopre dal basso, la linea di corsia si traccia da sinistra */
+    .fs-reveal--wipe {
+      animation-name: fs-wipe-up;
+      animation-range: entry 0% entry 70%;
+    }
+    .fs-reveal--lane {
+      animation-name: fs-wipe-right;
+      animation-range: entry 0% entry 100%;
+    }
+  }
+
+  .fs-reveal.is-waiting {
+    opacity: 0;
+  }
+  .fs-reveal.is-entering {
+    animation: fs-rise var(--duration-enter) var(--ease-out-soft) backwards;
+  }
+  .fs-reveal--wipe.is-entering {
+    animation-name: fs-wipe-up;
+    animation-duration: var(--duration-reveal);
+    animation-timing-function: var(--ease-in-out-soft);
+  }
+  .fs-reveal--lane.is-entering {
+    animation-name: fs-wipe-right;
+    animation-duration: var(--duration-lane);
+    animation-timing-function: var(--ease-in-out-soft);
+  }
+}

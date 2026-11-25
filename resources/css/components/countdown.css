@@ -56,7 +56,15 @@
       letter-spacing: 0.16em;
     }
   }
-  /* Ogni cella contiene la cifra uscente e quella entrante: lo script scrive i due testi e riattiva is-changing */
+  /* Sugli schermi da 320px "SECONDI" sta nella sua colonna solo più stretto */
+  @container (max-width: 299px) {
+    .fs-cd__label {
+      font-stretch: 100%;
+      letter-spacing: 0.08em;
+    }
+  }
+  /* Ogni cella contiene la cifra uscente e quella entrante (entrambe fs-chrome):
+     lo script scrive i due testi e riattiva is-changing */
   .fs-cd__cell {
     position: relative;
     display: block;
@@ -77,26 +85,6 @@
     display: block;
     height: 1em;
     text-align: center;
-    /* Cromo con una banda di luce che lo attraversa (fs-sheen) */
-    background-image:
-      linear-gradient(
-        90deg,
-        transparent 36%,
-        rgba(255, 255, 255, 0.92) 47%,
-        rgba(255, 255, 255, 0.92) 53%,
-        transparent 64%
-      ),
-      var(--metal-chrome);
-    background-size:
-      400% 100%,
-      100% 100%;
-    background-repeat: no-repeat;
-    background-position:
-      100% 0,
-      0 0;
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
   }
   .fs-cd__old {
     position: absolute;
@@ -105,9 +93,25 @@
     right: 0;
     opacity: 0;
   }
+  /* Il riflesso passa sulle cifre da sinistra a destra, una cella ogni 80 ms, dopo la cascata d'ingresso:
+     --sheen-first è la posizione della prima cella di ogni unità (0, 2, 4, 6). */
+  .fs-cd__unit:nth-child(2) {
+    --sheen-first: 2;
+  }
+  .fs-cd__unit:nth-child(3) {
+    --sheen-first: 4;
+  }
+  .fs-cd__unit:nth-child(4) {
+    --sheen-first: 6;
+  }
+  .fs-cd__cell {
+    --sheen-delay: calc(2400ms + 80ms * var(--sheen-first, 0));
+  }
+  .fs-cd__cell:nth-child(2) {
+    --sheen-delay: calc(2400ms + 80ms * (var(--sheen-first, 0) + 1));
+  }
   .fs-cd__new {
-    animation: fs-sheen var(--duration-sheen) var(--ease-in-out-soft) var(--sheen-delay, 2400ms)
-      infinite;
+    animation: fs-sheen var(--duration-sheen) var(--ease-in-out-soft) var(--sheen-delay) infinite;
   }
   .fs-cd__cell.is-changing > .fs-cd__old {
     animation: fs-digit-out var(--duration-digit) var(--ease-out-soft) both;
@@ -115,6 +119,6 @@
   .fs-cd__cell.is-changing > .fs-cd__new {
     animation:
       fs-digit-in var(--duration-digit) var(--ease-out-soft) both,
-      fs-sheen var(--duration-sheen) var(--ease-in-out-soft) var(--sheen-delay, 2400ms) infinite;
+      fs-sheen var(--duration-sheen) var(--ease-in-out-soft) var(--sheen-delay) infinite;
   }
 }

@@ -1,8 +1,24 @@
-/* ---------- Margini laterali della pagina ---------- */
+/* ---------- Margini laterali e colonne della pagina ---------- */
 
 @layer components {
   .fs-gutter {
     padding-left: var(--gutter);
     padding-right: var(--gutter);
+  }
+  /* Una colonna su mobile; da lg due colonne asimmetriche, 5 a 7 (testo stretto a sinistra) */
+  .fs-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+  }
+  @media (min-width: 1024px) {
+    .fs-split {
+      grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+      gap: var(--gutter);
+    }
+    /* La colonna larga a sinistra */
+    .fs-split--reverse {
+      grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    }
   }
 }

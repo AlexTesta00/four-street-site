@@ -6,7 +6,8 @@
     align-items: center;
     justify-content: center;
     gap: 12px;
-    height: 52px;
+    /* Alto 52px; su schermi stretti l'etichetta va a capo invece di uscire dal bottone */
+    min-height: 52px;
     padding: 0 24px;
     border: 1px solid transparent;
     font-family: var(--font-sans);
@@ -16,8 +17,8 @@
     letter-spacing: 0.16em;
     text-transform: uppercase;
     font-stretch: 112%;
+    text-align: center;
     text-decoration: none;
-    white-space: nowrap;
     cursor: pointer;
     transition:
       background-color var(--duration-fast) var(--ease-out-soft),
@@ -77,6 +78,32 @@
     color: var(--color-accent);
   }
   .fs-btn--sm {
-    height: 44px;
+    min-height: 44px;
+  }
+  /* A tutta larghezza: su mobile i bottoni si impilano */
+  .fs-btn--block {
+    display: flex;
+    width: 100%;
+  }
+  /* Quadrato con la sola icona (che ha sempre un aria-label) */
+  .fs-btn--icon {
+    width: 52px;
+    flex: none;
+    padding: 0;
+  }
+  .fs-btn--icon svg {
+    width: 20px;
+    height: 20px;
+  }
+  /* Funzione non ancora attiva: resta raggiungibile da tastiera, ma non fa nulla */
+  .fs-btn[aria-disabled="true"],
+  .fs-btn[aria-disabled="true"]:hover {
+    background: transparent;
+    border-color: var(--color-hairline-strong);
+    color: var(--color-fg-subtle);
+    cursor: not-allowed;
+  }
+  .fs-btn[aria-disabled="true"]:active {
+    transform: none;
   }
 }

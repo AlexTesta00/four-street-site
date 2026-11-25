@@ -13,11 +13,12 @@ use FourStreet\View\Template;
  * @var string $title
  * @var string $description
  * @var string|null $siteUrl indirizzo pubblico del sito, per l'anteprima social
+ * @var Html|null $structuredData dati strutturati JSON-LD della pagina, se ne ha
  */
 ?>
 <!doctype html>
 <html lang="it">
-<?= $view->partial('partials/document-head', ['title' => $title, 'description' => $description, 'siteUrl' => $siteUrl]) ?>
+<?= $view->partial('partials/document-head', ['title' => $title, 'description' => $description, 'siteUrl' => $siteUrl, 'structuredData' => $structuredData]) ?>
 <body>
 
 <?= $content ?>

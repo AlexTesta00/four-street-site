@@ -6,6 +6,8 @@ namespace FourStreet\Config;
 
 use DateTimeImmutable;
 use DateTimeZone;
+use FourStreet\Booking\ExampleSlotCatalog;
+use FourStreet\Content\PendingContent;
 
 /**
  * Configurazione del sito (config/site.php), validata e tipizzata.
@@ -24,6 +26,9 @@ final readonly class SiteConfig
         'maps_url',
         'links',
         'site_url',
+        'show_placeholders',
+        'content',
+        'booking',
     ];
 
     /**
@@ -38,6 +43,8 @@ final readonly class SiteConfig
         public ?string $mapsUrl,
         public array $links,
         public ?string $siteUrl,
+        public PendingContent $content,
+        public ExampleSlotCatalog $booking,
     ) {}
 
     public static function fromFile(string $path): self
@@ -59,27 +66,23 @@ final readonly class SiteConfig
      */
     public static function fromArray(array $values): self
     {
-        $unknown = array_diff(array_map(strval(...), array_keys($values)), self::KEYS);
-        if ($unknown !== []) {
-            throw new InvalidSiteConfig(sprintf(
-                'Configurazione del sito non valida: chiavi sconosciute (%s). Valori ammessi: %s.',
-                implode(', ', $unknown),
-                implode(', ', self::KEYS),
-            ));
-        }
+        $config = ConfigValues::root($values);
+        $config->assertKnownKeys(self::KEYS);
 
-        $timezone = self::timezone($values);
-        $siteUrl = self::optionalUrl($values, 'site_url');
+        $timezone = self::timezone($config);
+        $siteUrl = $config->optionalUrl('site_url');
 
         return new self(
-            name: self::text($values, 'name'),
+            name: $config->text('name'),
             timezone: $timezone,
-            opening: self::opening($values, $timezone),
-            openingTimeConfirmed: self::flag($values, 'opening_time_confirmed'),
-            address: self::text($values, 'address'),
-            mapsUrl: self::optionalUrl($values, 'maps_url'),
-            links: self::links($values),
+            opening: self::opening($config, $timezone),
+            openingTimeConfirmed: $config->flag('opening_time_confirmed'),
+            address: $config->text('address'),
+            mapsUrl: $config->optionalUrl('maps_url'),
+            links: self::links($config),
             siteUrl: $siteUrl === null ? null : rtrim($siteUrl, '/'),
+            content: PendingContent::fromConfig($config->section('content'), $config->flag('show_placeholders')),
+            booking: ExampleSlotCatalog::fromConfig($config->requiredSection('booking')),
         );
     }
 
@@ -99,41 +102,19 @@ final readonly class SiteConfig
         return $this->openingTimeConfirmed ? $this->opening->format('H:i') : null;
     }
 
-    /**
-     * @param array<mixed> $values
-     */
-    private static function text(array $values, string $key): string
+    private static function timezone(ConfigValues $config): DateTimeZone
     {
-        $value = $values[$key] ?? null;
-        if (!is_string($value) || trim($value) === '') {
-            throw self::invalid($key, 'deve essere un testo non vuoto', $value);
-        }
-        if (preg_match('/[\x00-\x1F\x7F]/', $value) === 1) {
-            throw self::invalid($key, 'deve stare su una riga, senza caratteri di controllo', $value);
-        }
-
-        return $value;
-    }
-
-    /**
-     * @param array<mixed> $values
-     */
-    private static function timezone(array $values): DateTimeZone
-    {
-        $value = $values['timezone'] ?? null;
+        $value = $config->raw('timezone');
         if (!is_string($value) || !in_array($value, DateTimeZone::listIdentifiers(), true)) {
-            throw self::invalid('timezone', 'deve essere un fuso orario come "Europe/Rome"', $value);
+            throw $config->invalid('timezone', 'deve essere un fuso orario come "Europe/Rome"', $value);
         }
 
         return new DateTimeZone($value);
     }
 
-    /**
-     * @param array<mixed> $values
-     */
-    private static function opening(array $values, DateTimeZone $timezone): DateTimeImmutable
+    private static function opening(ConfigValues $config, DateTimeZone $timezone): DateTimeImmutable
     {
-        $value = $values['opening'] ?? null;
+        $value = $config->raw('opening');
         if (is_string($value)) {
             $opening = DateTimeImmutable::createFromFormat('!' . self::OPENING_FORMAT, $value, $timezone);
             // Il confronto scarta le date inesistenti (31 aprile, ore saltate dal cambio dell'ora).
@@ -142,89 +123,34 @@ final readonly class SiteConfig
             }
         }
 
-        throw self::invalid('opening', 'deve essere una data e ora esistenti nel formato AAAA-MM-GG HH:MM', $value);
+        throw $config->invalid('opening', 'deve essere una data e ora esistenti nel formato AAAA-MM-GG HH:MM', $value);
     }
 
     /**
-     * @param array<mixed> $values
-     */
-    private static function flag(array $values, string $key): bool
-    {
-        $value = $values[$key] ?? null;
-        if (!is_bool($value)) {
-            throw self::invalid($key, 'deve essere true oppure false', $value);
-        }
-
-        return $value;
-    }
-
-    /**
-     * @param array<mixed> $values
-     */
-    private static function optionalUrl(array $values, string $key): ?string
-    {
-        $value = $values[$key] ?? '';
-        if ($value === '') {
-            return null;
-        }
-        if (!is_string($value) || !self::isWebUrl($value)) {
-            throw self::invalid($key, 'deve essere vuoto oppure un indirizzo completo http(s)://…', $value);
-        }
-
-        return $value;
-    }
-
-    /**
-     * @param array<mixed> $values
-     *
      * @return array<string, non-empty-string>
      */
-    private static function links(array $values): array
+    private static function links(ConfigValues $config): array
     {
-        $value = $values['links'] ?? [];
+        $value = $config->raw('links') ?? [];
         if (!is_array($value)) {
-            throw self::invalid('links', 'deve essere un elenco nome => indirizzo', $value);
+            throw $config->invalid('links', 'deve essere un elenco nome => indirizzo', $value);
         }
 
         $links = [];
         foreach ($value as $name => $url) {
             if (!is_string($name) || $name === '') {
-                throw self::invalid('links', 'deve avere un nome per ogni link', $name);
+                throw $config->invalid('links', 'deve avere un nome per ogni link', $name);
             }
             // I link vuoti non vengono pubblicati.
             if ($url === '') {
                 continue;
             }
-            if (!is_string($url) || !self::isWebUrl($url)) {
-                throw self::invalid('links.' . $name, 'deve essere vuoto oppure un indirizzo completo http(s)://…', $url);
+            if (!is_string($url) || !ConfigValues::isWebUrl($url)) {
+                throw $config->invalid('links.' . $name, 'deve essere vuoto oppure un indirizzo completo http(s)://…', $url);
             }
             $links[$name] = $url;
         }
 
         return $links;
-    }
-
-    private static function isWebUrl(string $value): bool
-    {
-        if (preg_match('/[\s\x00-\x1F\x7F]/', $value) === 1) {
-            return false;
-        }
-        $parts = parse_url($value);
-
-        return is_array($parts)
-            && in_array(strtolower($parts['scheme'] ?? ''), ['http', 'https'], true)
-            && ($parts['host'] ?? '') !== '';
-    }
-
-    private static function invalid(string $key, string $rule, mixed $found): InvalidSiteConfig
-    {
-        $shown = is_string($found) ? '"' . $found . '"' : get_debug_type($found);
-
-        return new InvalidSiteConfig(sprintf(
-            'Configurazione del sito non valida: "%s" %s (trovato: %s).',
-            $key,
-            $rule,
-            $shown,
-        ));
     }
 }

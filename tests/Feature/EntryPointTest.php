@@ -27,7 +27,7 @@ final class EntryPointTest extends TestCase
     public function testServesThePages(): void
     {
         self::assertStringContainsString('<title>4Street · Link</title>', self::serve('GET', '/links/'));
-        self::assertStringContainsString('<section id="live"', self::serve('GET', '/?anteprima=mappa'));
+        self::assertStringContainsString('<span data-state="open">Siamo aperti.</span>', self::serve('GET', '/?anteprima=mappa'));
         self::assertStringContainsString('<title>4Street · Pagina non trovata</title>', self::serve('GET', '/non-esiste'));
     }
 

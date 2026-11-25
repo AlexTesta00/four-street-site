@@ -33,12 +33,10 @@ final class SecurityHeadersTest extends TestCase
         self::assertSame([
             'default-src' => "'self'",
             'script-src' => "'self'",
-            'style-src-elem' => "'self' https://fonts.googleapis.com",
-            'style-src-attr' => "'unsafe-inline'",
-            'style-src' => "'self' 'unsafe-inline' https://fonts.googleapis.com",
+            'style-src' => "'self' https://fonts.googleapis.com",
             'font-src' => "'self' https://fonts.gstatic.com",
             'img-src' => "'self'",
-            'frame-src' => 'https://www.google.com',
+            'frame-src' => "'none'",
             'object-src' => "'none'",
             'base-uri' => "'self'",
             'form-action' => "'self'",
@@ -51,9 +49,26 @@ final class SecurityHeadersTest extends TestCase
         $policy = self::directives(SecurityHeaders::forSite()->applyTo(new Response())->header('Content-Security-Policy'));
 
         self::assertArrayHasKey('script-src', $policy);
-        self::assertArrayHasKey('style-src-elem', $policy);
         self::assertSame("'self'", $policy['script-src']);
-        self::assertStringNotContainsString('unsafe-inline', $policy['style-src-elem']);
+    }
+
+    public function testNothingInlineIsAllowed(): void
+    {
+        $policy = (string) SecurityHeaders::forSite()->applyTo(new Response())->header('Content-Security-Policy');
+
+        // Né <style> né attributi style né script scritti nella pagina: le direttive specifiche non servono.
+        self::assertStringNotContainsString('unsafe-inline', $policy);
+        self::assertStringNotContainsString('unsafe-eval', $policy);
+        self::assertStringNotContainsString('style-src-attr', $policy);
+        self::assertStringNotContainsString('style-src-elem', $policy);
+    }
+
+    public function testNoThirdPartyFrames(): void
+    {
+        $policy = self::directives(SecurityHeaders::forSite()->applyTo(new Response())->header('Content-Security-Policy'));
+
+        self::assertArrayHasKey('frame-src', $policy);
+        self::assertSame("'none'", $policy['frame-src']);
     }
 
     public function testDoesNotOverrideWhatTheControllerDecided(): void

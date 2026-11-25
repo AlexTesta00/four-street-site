@@ -1,0 +1,79 @@
+/* ---------- Posti ----------
+   Un quadrato per posto: pieno se è occupato, vuoto con il filetto dei controlli se è libero.
+   Nelle fasce orarie sono piccoli; in apertura sono grandi e si riempiono uno dopo l'altro. */
+
+@layer components {
+  .fs-seats {
+    display: flex;
+    gap: 4px;
+    min-width: 0;
+  }
+  .fs-seat {
+    display: block;
+    flex: none;
+    width: 12px;
+    height: 12px;
+    border: 1px solid var(--color-control);
+    transition:
+      background-color var(--duration-base) var(--ease-out-soft),
+      border-color var(--duration-base) var(--ease-out-soft);
+  }
+  .fs-seat--taken {
+    background: var(--color-fg-muted);
+    border-color: var(--color-fg-muted);
+  }
+
+  /* In apertura: fino a 44px per lato, più piccoli solo se lo schermo non basta */
+  .fs-seats--lg {
+    gap: 8px;
+  }
+  .fs-seats--lg .fs-seat {
+    display: flex;
+    flex: 0 1 auto;
+    width: 44px;
+    height: auto;
+    min-width: 0;
+    aspect-ratio: 1;
+    padding: 5px;
+  }
+  /* Riempie il posto come elemento flessibile: un'altezza in percentuale qui non avrebbe riferimento */
+  .fs-seat__fill {
+    flex: 1;
+    background: var(--color-fg-muted);
+    animation: fs-wipe-up var(--duration-base) var(--ease-in-out-soft) backwards;
+  }
+  /* Tre passi della cascata tra un posto e il successivo */
+  .fs-seat:nth-child(1) > .fs-seat__fill {
+    animation-delay: calc(var(--duration-stagger) * 4);
+  }
+  .fs-seat:nth-child(2) > .fs-seat__fill {
+    animation-delay: calc(var(--duration-stagger) * 7);
+  }
+  .fs-seat:nth-child(3) > .fs-seat__fill {
+    animation-delay: calc(var(--duration-stagger) * 10);
+  }
+  .fs-seat:nth-child(4) > .fs-seat__fill {
+    animation-delay: calc(var(--duration-stagger) * 13);
+  }
+  .fs-seat:nth-child(n + 5) > .fs-seat__fill {
+    animation-delay: calc(var(--duration-stagger) * 16);
+  }
+
+  @media (min-width: 1024px) {
+    .fs-seats {
+      gap: 6px;
+    }
+    .fs-seat {
+      width: 14px;
+      height: 14px;
+    }
+    .fs-seats--lg {
+      gap: 12px;
+    }
+    .fs-seats--lg .fs-seat {
+      width: 56px;
+      height: auto;
+      padding: 6px;
+    }
+  }
+}

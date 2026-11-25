@@ -28,7 +28,7 @@ final readonly class OpeningSchedule
             : $opening;
     }
 
-    /** Il countdown è scaduto (o l'anteprima "mappa" lo finge): si mostra la mappa. */
+    /** Il countdown è scaduto (o l'anteprima "mappa" lo finge): la home è nello stato "aperti". */
     public function isLive(): bool
     {
         return $this->preview === Preview::Map || $this->now >= $this->countdownTarget;

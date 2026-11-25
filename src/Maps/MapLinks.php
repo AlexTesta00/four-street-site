@@ -28,10 +28,4 @@ final readonly class MapLinks
     {
         return 'https://maps.apple.com/?daddr=' . rawurlencode($this->address);
     }
-
-    /** Mappa da incorporare nell'iframe (non richiede chiavi API). */
-    public function embed(): string
-    {
-        return 'https://www.google.com/maps?q=' . rawurlencode($this->address) . '&z=16&hl=it&output=embed';
-    }
 }

@@ -1,0 +1,52 @@
+/* ---------- Barra delle azioni ----------
+   In fondo allo schermo su mobile e tablet: "Vieni a trovarci" e WhatsApp sempre a portata di pollice.
+   È l'ultimo elemento della pagina e resta attaccata al bordo (sticky): alla fine della pagina torna
+   al suo posto, sotto il piè di pagina, quindi non copre mai il contenuto.
+   Lo script la nasconde (is-hidden) mentre un bottone oro del contenuto è sullo schermo: mai due ori
+   nella stessa vista. Nascosta scivola sotto il bordo dentro il proprio riquadro, che non cambia
+   misura: niente spostamenti della pagina. */
+
+@layer components {
+  .fs-actionbar {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    overflow: hidden;
+  }
+  .fs-actionbar__inner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 72px;
+    padding: 9px 20px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: var(--color-canvas);
+    border-top: 1px solid var(--color-hairline);
+    transition:
+      transform var(--duration-base) var(--ease-out-soft),
+      opacity var(--duration-base) var(--ease-out-soft),
+      visibility 0s linear 0s;
+  }
+  /* Sugli schermi più stretti (320px) il bottone oro resta su una riga */
+  .fs-actionbar .fs-btn--primary {
+    padding-inline: 16px;
+    white-space: nowrap;
+  }
+  .fs-actionbar.is-hidden {
+    pointer-events: none;
+  }
+  /* visibility arriva a fine corsa: nascosta, la barra non riceve il focus e non viene letta */
+  .fs-actionbar.is-hidden .fs-actionbar__inner {
+    transform: translateY(100%);
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      transform var(--duration-base) var(--ease-out-soft),
+      opacity var(--duration-base) var(--ease-out-soft),
+      visibility 0s linear var(--duration-base);
+  }
+  @media (min-width: 1024px) {
+    .fs-actionbar {
+      display: none;
+    }
+  }
+}

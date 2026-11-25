@@ -1,4 +1,5 @@
-/* Bottoni "Copia indirizzo": copiano il testo di data-copy e lo confermano nell'etichetta. */
+/* Bottoni "Copia indirizzo": copiano il testo di data-copy e lo confermano nell'etichetta.
+   data-copy-status è l'id di una regione aria-live: la conferma arriva anche ai lettori di schermo. */
 
 /** Dopo quanto l'etichetta torna al testo di partenza. */
 const FEEDBACK_MS = 2000;
@@ -9,15 +10,18 @@ const FEEDBACK_MS = 2000;
 export function initCopyAddress(root = document) {
   root.querySelectorAll('[data-copy]').forEach((button) => {
     const label = button.querySelector('[data-copy-label]');
+    const status = document.getElementById(button.getAttribute('data-copy-status') ?? '');
     const original = label ? label.textContent : '';
     let resetTimer;
 
     const done = (ok) => {
-      if (!label) return;
-      label.textContent = ok ? 'Copiato' : 'Copia non riuscita';
+      if (label) label.textContent = ok ? 'Copiato' : 'Copia non riuscita';
+      if (status) status.textContent = ok ? 'Indirizzo copiato.' : 'Copia non riuscita.';
       window.clearTimeout(resetTimer);
       resetTimer = window.setTimeout(() => {
-        label.textContent = original;
+        if (label) label.textContent = original;
+        // Vuota la regione: alla copia successiva il messaggio viene letto di nuovo.
+        if (status) status.textContent = '';
       }, FEEDBACK_MS);
     };
 

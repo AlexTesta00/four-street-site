@@ -41,7 +41,7 @@ final class IconsTest extends TestCase
         $icons = new Icons();
 
         self::assertSame(
-            ['arrow', 'calendar-add', 'calendar', 'navigate', 'copy', 'instagram', 'whatsapp', 'pin', 'clock', 'bag'],
+            ['arrow', 'calendar', 'navigate', 'copy', 'list', 'plus', 'instagram', 'whatsapp', 'pin', 'clock', 'bag'],
             $icons->names(),
         );
         foreach ($icons->names() as $name) {
@@ -52,6 +52,8 @@ final class IconsTest extends TestCase
         }
         // L'icona dell'orologio ha la lancetta animata.
         self::assertStringContainsString('class="fs-anim-tick"', (string) $icons->svg('clock'));
+        // Nelle domande frequenti, a risposta aperta, sparisce l'ultimo tratto del più: quello verticale.
+        self::assertStringEndsWith('<path d="M12 5v14"></path></svg>', (string) $icons->svg('plus'));
     }
 
     public function testUnknownIconsFailLoudly(): void

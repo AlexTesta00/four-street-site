@@ -81,7 +81,8 @@ final readonly class Application
         $maps = new MapLinks($site->address, $site->mapsUrl);
 
         $router = new Router([
-            Route::get('/', new HomeController($view, $site, $clock, $dates, $maps)),
+            // Le fasce di esempio di config/site.php; con le prenotazioni vere, un catalogo sul database.
+            Route::get('/', new HomeController($view, $site, $clock, $dates, $maps, $site->booking)),
             Route::get('/links/', new LinksController($view, $site, $clock, $dates, $maps)),
             // Indirizzo già condiviso: non cambiarlo.
             Route::get('/calendario.php', new CalendarController($site, $clock)),

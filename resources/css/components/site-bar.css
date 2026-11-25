@@ -17,6 +17,7 @@
     }
   }
   .fs-bar__mark {
+    position: relative;
     display: inline-flex;
     align-items: center;
     height: 32px;
@@ -34,5 +35,11 @@
   }
   .fs-bar__mark:hover {
     border-color: var(--color-fg);
+  }
+  /* Il segnaposto è alto 32px: l'area da toccare arriva a 44px senza cambiarne l'aspetto */
+  .fs-bar__mark::after {
+    content: "";
+    position: absolute;
+    inset: -7px 0;
   }
 }

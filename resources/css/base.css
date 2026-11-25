@@ -5,6 +5,12 @@
     background: var(--color-canvas);
     color-scheme: dark;
   }
+  /* I link interni (#dove, #domande…) scorrono fino alla sezione, ma solo se il movimento è gradito */
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
   body {
     min-height: 100vh;
     min-height: 100dvh;
@@ -17,7 +23,8 @@
     overflow-x: hidden;
   }
   a:focus-visible,
-  button:focus-visible {
+  button:focus-visible,
+  summary:focus-visible {
     outline: none;
     box-shadow: var(--focus-ring);
   }

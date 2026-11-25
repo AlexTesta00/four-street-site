@@ -1,0 +1,16 @@
+/* ---------- Passo ----------
+   Un passo numerato di "Come funziona": il numero a sinistra, titolo e testo a destra, sulla stessa linea. */
+
+@layer components {
+  .fs-step {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 12px;
+    align-items: baseline;
+  }
+  @media (min-width: 1024px) {
+    .fs-step {
+      grid-template-columns: 40px minmax(0, 1fr);
+    }
+  }
+}

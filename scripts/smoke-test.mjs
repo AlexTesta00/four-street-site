@@ -17,7 +17,10 @@ const php = process.env.PHP_BIN || 'php';
 const port = Number(process.env.SMOKE_PORT || 8089);
 const base = `http://127.0.0.1:${port}`;
 
-/** Richieste da provare. I testi cercati non dipendono dalla data (prima o dopo l'apertura). */
+/**
+ * Richieste da provare. I testi cercati (body) e quelli che non devono esserci (absent)
+ * non dipendono dalla data: prima o dopo l'apertura la landing ha le stesse sezioni.
+ */
 const REQUESTS = [
   {
     path: '/',
@@ -25,11 +28,18 @@ const REQUESTS = [
     type: 'text/html',
     body: [
       '<html lang="it">',
-      'id="live"',
+      '<h1 id="titolo"',
+      'data-state="open"',
+      'data-slot-picker',
+      'id="dove"',
+      'aria-label="Azioni rapide"',
+      '<script type="application/ld+json">',
       '/assets/css/app.css?v=',
       '/assets/js/app.js?v=',
       '/assets/img/logo.jpg?v=',
     ],
+    // La Content-Security-Policy non ammette stili in linea né siti incorporati.
+    absent: [' style=', '<iframe'],
   },
   { path: '/links/', status: 200, type: 'text/html', body: ['<html lang="it">', 'class="fs-link'] },
   { path: '/links', status: 301, location: '/links/' },
@@ -39,8 +49,13 @@ const REQUESTS = [
     type: 'text/calendar',
     body: ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'END:VCALENDAR'],
   },
-  { path: '/assets/css/app.css', status: 200, type: 'text/css', body: ['.fs-btn'] },
-  { path: '/assets/js/app.js', status: 200, type: 'javascript', body: ['data-countdown'] },
+  { path: '/assets/css/app.css', status: 200, type: 'text/css', body: ['.fs-btn', '.fs-slot'] },
+  {
+    path: '/assets/js/app.js',
+    status: 200,
+    type: 'javascript',
+    body: ['data-countdown', 'data-slot-picker', 'data-action-bar', 'data-reveal'],
+  },
   { path: '/assets/img/logo.jpg', status: 200, type: 'image/jpeg' },
   { path: '/pagina-che-non-esiste', status: 404, type: 'text/html' },
   { path: '/_app/composer.json', status: 404 },
@@ -91,7 +106,7 @@ async function waitForServer(server) {
   return false;
 }
 
-async function checkRequest({ path, status, type, body = [], location }) {
+async function checkRequest({ path, status, type, body = [], absent = [], location }) {
   const response = await fetch(`${base}${path}`, { redirect: 'manual' });
   const contentType = response.headers.get('content-type') ?? '';
   const text = await response.text();
@@ -105,6 +120,9 @@ async function checkRequest({ path, status, type, body = [], location }) {
   }
   for (const marker of body) {
     check(text.includes(marker), `GET ${path} contiene ${marker}`);
+  }
+  for (const marker of absent) {
+    check(!text.includes(marker), `GET ${path} non contiene ${marker}`);
   }
 }
 

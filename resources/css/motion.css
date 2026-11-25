@@ -24,6 +24,14 @@
   .fs-anim-breathe {
     animation: fs-breathe var(--duration-pulse) var(--ease-in-out-soft) infinite;
   }
+  /* Sulle cifre cromate (fs-chrome): la banda di luce le attraversa ogni duration-sheen */
+  .fs-anim-sheen {
+    animation: fs-sheen var(--duration-sheen) var(--ease-in-out-soft) infinite;
+  }
+  /* Tratteggio della strada sulla mappa (10 14): scorre verso il pin */
+  .fs-anim-flow {
+    animation: fs-flow var(--duration-flow) linear infinite;
+  }
   .fs-anim-pin {
     transform-box: fill-box;
     transform-origin: center;
@@ -76,14 +84,12 @@
   .fs-step-12 {
     animation-delay: calc(var(--duration-stagger) * 12);
   }
-  .fs-step-14 {
-    animation-delay: calc(var(--duration-stagger) * 14);
-  }
-  .fs-step-16 {
-    animation-delay: calc(var(--duration-stagger) * 16);
+  /* Dopo la cascata: il primo riflesso sulla cifra cromata della landing */
+  .fs-step-20 {
+    animation-delay: calc(var(--duration-stagger) * 20);
   }
 
-  /* Allo zero il countdown esce (sfuma e sale), poi entra lo stato "Ci siamo" */
+  /* Allo zero il blocco del countdown esce (sfuma e sale), poi entra lo stato "aperti" */
   .fs-stage.is-leaving {
     animation: fs-leave 600ms var(--ease-in-out-soft) forwards;
   }
@@ -222,5 +228,20 @@
 @keyframes fs-tick {
   to {
     transform: rotate(360deg);
+  }
+}
+/* Il percorso ha pathLength="1": da nascosto (1) a disegnato (0) */
+@keyframes fs-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+/* Un periodo del tratteggio 10 14 */
+@keyframes fs-flow {
+  to {
+    stroke-dashoffset: -24;
   }
 }

@@ -15,6 +15,12 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(InvalidSiteConfig::class)]
 final class SiteConfigTest extends TestCase
 {
+    private const array BOOKING = [
+        'capacity' => 5,
+        'example_slots' => ['17:30' => 5, '18:30' => 3],
+        'default_slot' => '18:30',
+    ];
+
     public function testReadsAValidConfiguration(): void
     {
         $config = SiteFixture::config();
@@ -29,6 +35,25 @@ final class SiteConfigTest extends TestCase
         self::assertSame('https://wa.me/393662546495', $config->link('whatsapp'));
         self::assertNull($config->link('tiktok'));
         self::assertSame('https://fourstreet.studio', $config->siteUrl);
+        self::assertTrue($config->content->showPlaceholders);
+        self::assertNull($config->content->hours);
+        self::assertNull($config->content->roomPhoto);
+        self::assertSame(5, $config->booking->capacity());
+        self::assertCount(6, $config->booking->slots());
+        self::assertSame('18:30', $config->booking->defaultSlot()->time);
+    }
+
+    public function testThePlaceholderSwitchAndTheContent(): void
+    {
+        $config = SiteFixture::config([
+            'show_placeholders' => false,
+            'content' => ['hours' => 'Dal lunedì al sabato, 7:00-22:00', 'privacy_url' => 'https://fourstreet.studio/privacy/'],
+        ]);
+
+        self::assertFalse($config->content->showPlaceholders);
+        self::assertSame('Dal lunedì al sabato, 7:00-22:00', $config->content->hours);
+        self::assertSame('https://fourstreet.studio/privacy/', $config->content->privacyUrl);
+        self::assertNull($config->content->prices);
     }
 
     public function testTheOpeningIsInTheConfiguredTimezoneNotTheMachineOne(): void
@@ -55,12 +80,13 @@ final class SiteConfigTest extends TestCase
     public function testOptionalValuesCanBeEmptyOrMissing(): void
     {
         $values = SiteFixture::values();
-        unset($values['maps_url'], $values['links'], $values['site_url']);
+        unset($values['maps_url'], $values['links'], $values['site_url'], $values['content']);
         $config = SiteConfig::fromArray($values);
 
         self::assertNull($config->mapsUrl);
         self::assertSame([], $config->links);
         self::assertNull($config->siteUrl);
+        self::assertNull($config->content->company);
         self::assertNull(SiteFixture::config(['site_url' => ''])->siteUrl);
     }
 
@@ -132,6 +158,16 @@ final class SiteConfigTest extends TestCase
         yield 'link non valido' => [['links' => ['instagram' => 'instagram.com/4street']], '"links.instagram" deve essere vuoto oppure un indirizzo completo'];
         yield 'link non testo' => [['links' => ['instagram' => true]], '"links.instagram" deve essere vuoto oppure un indirizzo completo'];
         yield 'sito non valido' => [['site_url' => 'javascript:alert(1)'], '"site_url" deve essere vuoto oppure un indirizzo completo'];
+        yield 'segnaposto come testo' => [['show_placeholders' => 'no'], '"show_placeholders" deve essere true oppure false (trovato: "no")'];
+        yield 'contenuti non elenco' => [['content' => 'orari'], '"content" deve essere un elenco chiave => valore'];
+        yield 'contenuto sconosciuto' => [['content' => ['orari' => '7-22']], 'chiavi sconosciute in "content" (orari)'];
+        yield 'orari su due righe' => [['content' => ['hours' => "Lun-Ven\nSab"]], '"content.hours" deve stare su una riga'];
+        yield 'foto fuori posto' => [['content' => ['photos' => ['room' => ['src' => '/sala.jpg', 'width' => 1, 'height' => 1, 'alt' => 'x']]]], '"content.photos.room.src" deve essere un file'];
+        yield 'privacy senza schema' => [['content' => ['privacy_url' => 'fourstreet.studio/privacy']], '"content.privacy_url" deve essere vuoto oppure un indirizzo completo'];
+        yield 'prenotazione sconosciuta' => [['booking' => [...self::BOOKING, 'max' => 5]], 'chiavi sconosciute in "booking" (max)'];
+        yield 'capienza zero' => [['booking' => [...self::BOOKING, 'capacity' => 0]], '"booking.capacity" deve essere un numero intero maggiore di zero'];
+        yield 'fascia oltre la capienza' => [['booking' => [...self::BOOKING, 'example_slots' => ['18:30' => 6]]], '"booking.example_slots.18:30" deve essere il numero di posti occupati, da 0 a 5'];
+        yield 'fascia scelta piena' => [['booking' => [...self::BOOKING, 'default_slot' => '17:30']], '"booking.default_slot" deve essere l\'orario di una fascia di esempio non piena'];
     }
 
     /**
@@ -151,7 +187,7 @@ final class SiteConfigTest extends TestCase
      */
     public static function requiredKeys(): iterable
     {
-        foreach (['name', 'timezone', 'opening', 'opening_time_confirmed', 'address'] as $key) {
+        foreach (['name', 'timezone', 'opening', 'opening_time_confirmed', 'address', 'show_placeholders', 'booking'] as $key) {
             yield $key => [$key];
         }
     }

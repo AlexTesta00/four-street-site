@@ -1,0 +1,93 @@
+/* ---------- Fasce orarie ----------
+   Un gruppo di radio. Ogni fascia è una riga panel: orario, posti (fs-seat) e capienza ("3/5"),
+   oppure il tag "Completo". La radio vera resta invisibile ma raggiungibile da tastiera:
+   la riga che la segue ne mostra lo stato (scelta, focus, piena), anche senza JavaScript. */
+
+@layer components {
+  .fs-slots {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+  /* Flottante, la legenda è un elemento come gli altri: niente posizionamento speciale nel bordo */
+  .fs-slots__legend {
+    float: left;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    width: 100%;
+    margin-bottom: 4px;
+  }
+  .fs-slot {
+    position: relative;
+    display: block;
+  }
+  .fs-slot__input {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    opacity: 0;
+  }
+  .fs-slot__row {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 16px;
+    min-height: 52px;
+    padding: 0 16px;
+    background: var(--color-panel);
+    border: 1px solid var(--color-hairline-strong);
+    color: var(--color-fg);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-fast) var(--ease-out-soft),
+      border-color var(--duration-fast) var(--ease-out-soft),
+      transform var(--duration-press) var(--ease-out-soft);
+  }
+  .fs-slot:hover > .fs-slot__input:not(:checked, :disabled) + .fs-slot__row {
+    background: var(--color-panel-hover);
+    border-color: var(--color-control);
+  }
+  .fs-slot:active > .fs-slot__input:not(:disabled) + .fs-slot__row {
+    transform: translateY(1px);
+  }
+  .fs-slot__input:focus-visible + .fs-slot__row {
+    box-shadow: var(--focus-ring);
+  }
+  /* La fascia scelta: fondo tinto d'oro, filetto oro e, in oro, il posto che sarebbe tuo */
+  .fs-slot__input:checked + .fs-slot__row {
+    background: var(--color-accent-tint);
+    border-color: var(--color-accent-line);
+  }
+  .fs-slot__input:checked + .fs-slot__row .fs-seat--next {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+  /* La fascia piena: spenta, non si sceglie */
+  .fs-slot__input:disabled + .fs-slot__row {
+    border-color: var(--color-hairline);
+    color: var(--color-fg-subtle);
+    cursor: not-allowed;
+  }
+  .fs-slot__input:disabled + .fs-slot__row .fs-seat--taken {
+    background: var(--color-fg-subtle);
+    border-color: var(--color-fg-subtle);
+  }
+  .fs-slot__status {
+    justify-self: end;
+  }
+
+  @media (min-width: 1024px) {
+    .fs-slot__row {
+      grid-template-columns: 72px minmax(0, 1fr) auto;
+      gap: 24px;
+      min-height: 56px;
+      padding: 0 20px;
+    }
+  }
+}

@@ -17,6 +17,7 @@ $view->layout('layouts/base', [
     'title' => '4Street · Pagina non trovata',
     'description' => 'La pagina che cerchi non esiste. 4Street, palestra a San Marino.',
     'siteUrl' => $site->siteUrl,
+    'structuredData' => null,
 ]);
 ?>
 <?= $view->partial('partials/site-bar', ['dateTag' => $dateTag]) ?>

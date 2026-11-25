@@ -10,18 +10,35 @@
 @import "./tokens.css";
 @import "./base.css";
 
+/* Testo, impaginazione e materiali */
 @import "./components/text.css";
 @import "./components/layout.css";
+@import "./components/chrome.css";
+@import "./components/panel.css";
+
+/* Controlli e piccoli elementi */
+@import "./components/skip-link.css";
 @import "./components/buttons.css";
 @import "./components/tags.css";
+@import "./components/seat.css";
+
+/* Blocchi della pagina, nell'ordine in cui compaiono */
 @import "./components/site-bar.css";
 @import "./components/logo.css";
+@import "./components/numeral.css";
+@import "./components/hero.css";
 @import "./components/countdown.css";
 @import "./components/link-card.css";
+@import "./components/rule.css";
+@import "./components/step.css";
+@import "./components/slot.css";
+@import "./components/photo.css";
 @import "./components/detail-list.css";
 @import "./components/map.css";
-@import "./components/live.css";
+@import "./components/faq.css";
 @import "./components/lane.css";
+@import "./components/actionbar.css";
+@import "./components/reveal.css";
 
 @import "./motion.css";
 @import "./reduced-motion.css";

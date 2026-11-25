@@ -26,9 +26,8 @@ final class MapLinksTest extends TestCase
         $links = new MapLinks(self::ADDRESS, 'https://maps.app.goo.gl/AbC123');
 
         self::assertSame('https://maps.app.goo.gl/AbC123', $links->googleMaps());
-        // Apple Mappe e la mappa incorporata usano sempre l'indirizzo.
+        // Apple Mappe usa sempre l'indirizzo.
         self::assertStringContainsString('Via%20del%20Bando', $links->appleMaps());
-        self::assertStringContainsString('Via%20del%20Bando', $links->embed());
     }
 
     public function testAppleMapsDirections(): void
@@ -36,14 +35,6 @@ final class MapLinksTest extends TestCase
         self::assertSame(
             'https://maps.apple.com/?daddr=Via%20del%20Bando%2022%2C%20San%20Marino',
             (new MapLinks(self::ADDRESS))->appleMaps(),
-        );
-    }
-
-    public function testEmbedUrl(): void
-    {
-        self::assertSame(
-            'https://www.google.com/maps?q=Via%20del%20Bando%2022%2C%20San%20Marino&z=16&hl=it&output=embed',
-            (new MapLinks(self::ADDRESS))->embed(),
         );
     }
 

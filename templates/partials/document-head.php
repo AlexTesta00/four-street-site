@@ -2,15 +2,17 @@
 
 declare(strict_types=1);
 
+use FourStreet\View\Html;
 use FourStreet\View\Template;
 
 /**
- * Testata del documento: meta, anteprima social, font e foglio di stile.
+ * Testata del documento: meta, anteprima social, font, foglio di stile e, se ci sono, i dati strutturati.
  *
  * @var Template $view
  * @var string $title
  * @var string $description
  * @var string|null $siteUrl
+ * @var Html|null $structuredData blocco <script type="application/ld+json">, se la pagina ne ha uno
  */
 ?>
 <head>
@@ -33,4 +35,8 @@ use FourStreet\View\Template;
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=Bodoni+Moda:opsz,wght@6..96,400..900&amp;display=swap">
 <link rel="stylesheet" href="<?= $view->asset('/assets/css/app.css') ?>">
+<?php if ($structuredData !== null): ?>
+<?= $structuredData ?>
+
+<?php endif; ?>
 </head>

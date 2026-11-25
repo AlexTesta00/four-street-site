@@ -1,0 +1,94 @@
+/* ---------- Apertura della landing ----------
+   Su mobile una colonna nell'ordine di lettura. Da lg la cifra grande sta a sinistra e il resto
+   a destra, allineato in basso; sotto, l'inaugurazione a sinistra e il countdown a destra. */
+
+@layer components {
+  .fs-hero__intro {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "eyebrow" "numeral" "title" "tally" "lead" "actions";
+  }
+  .fs-hero__eyebrow {
+    grid-area: eyebrow;
+  }
+  .fs-hero__numeral {
+    grid-area: numeral;
+    margin-top: 16px;
+  }
+  .fs-hero__title {
+    grid-area: title;
+    margin-top: 16px;
+  }
+  .fs-hero__tally {
+    grid-area: tally;
+    margin-top: 32px;
+  }
+  .fs-hero__lead {
+    grid-area: lead;
+    margin-top: 32px;
+  }
+  .fs-hero__actions {
+    grid-area: actions;
+    margin-top: 32px;
+  }
+
+  /* Il blocco sotto i bottoni: l'inaugurazione con il countdown, oppure "Aperti" */
+  .fs-hero__state {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    justify-items: start;
+    gap: 20px;
+    padding-top: 32px;
+    border-top: 1px solid var(--color-hairline);
+  }
+  .fs-hero__timer {
+    justify-self: stretch;
+  }
+
+  @media (min-width: 1024px) {
+    .fs-hero__intro {
+      grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+      /* La prima riga prende lo spazio in più: il testo a destra scende fino alla base della cifra */
+      grid-template-rows: 1fr repeat(5, auto);
+      grid-template-areas:
+        "numeral ."
+        "numeral eyebrow"
+        "numeral title"
+        "numeral tally"
+        "numeral lead"
+        "numeral actions";
+      column-gap: var(--gutter);
+    }
+    .fs-hero__numeral {
+      align-self: end;
+      margin-top: 0;
+    }
+    .fs-hero__title {
+      margin-top: 24px;
+    }
+    .fs-hero__tally,
+    .fs-hero__lead,
+    .fs-hero__actions {
+      margin-top: 40px;
+    }
+
+    .fs-hero__state {
+      padding-top: 48px;
+    }
+    /* Prima dell'apertura: tag, data e calendario a sinistra, countdown a destra */
+    .fs-hero__state--event {
+      grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+      grid-template-rows: 1fr auto auto;
+      align-items: end;
+      column-gap: var(--gutter);
+    }
+    .fs-hero__state--event > :not(.fs-hero__timer) {
+      grid-column: 1;
+    }
+    .fs-hero__timer {
+      grid-column: 2;
+      grid-row: 1 / -1;
+    }
+  }
+}
