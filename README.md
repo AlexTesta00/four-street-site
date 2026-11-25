@@ -4,7 +4,7 @@ Sito di 4Street, palestra a San Marino: [fourstreet.studio](https://fourstreet.s
 
 Oggi il sito ha tre indirizzi:
 
-- `/`: conto alla rovescia fino all'inaugurazione. Il giorno dell'apertura la pagina mostra "Ci siamo" e la mappa; dal giorno dopo, "Siamo aperti". Per provare gli stati: `/?anteprima=mappa` e `/?anteprima=zero`.
+- `/`: la landing. La regola dei cinque posti per fascia oraria, come funzionerà la prenotazione, lo spazio, dove siamo con la mappa illustrata, le domande frequenti e l'invito a venire. Su mobile e tablet una barra in fondo allo schermo tiene a portata "Vieni a trovarci" e WhatsApp. Fino all'inaugurazione la pagina ha il conto alla rovescia; allo zero passa allo stato "aperti" senza ricaricare, e dal giorno dell'apertura il server la scrive già così. Per provare gli stati: `/?anteprima=mappa` (la pagina come se fossimo aperti) e `/?anteprima=zero` (il conto arriva a zero dopo 12 secondi).
 - `/links/`: la pagina dei link.
 - `/calendario.php`: l'evento dell'inaugurazione da aggiungere al calendario (file `.ics`).
 
@@ -18,16 +18,18 @@ public/              radice web: solo ciò che il browser può raggiungere
   index.php          unico punto d'ingresso PHP (front controller)
   .htaccess          rimanda gli indirizzi a index.php, blocca file nascosti e _app/, cache degli asset
   assets/            immagini; css/app.css e js/app.js li genera la build
-resources/css/       sorgenti Tailwind: app.css importa token, base, componenti e movimento
+resources/css/       sorgenti Tailwind: app.css importa token, base, componenti (uno per file) e movimento
 resources/js/        sorgenti JavaScript: app.js collega le funzioni di features/, la logica pura sta in lib/
 src/                 classi PHP, namespace FourStreet\
-templates/           viste PHP: layouts/, partials/, pages/
+templates/           viste PHP: layouts/, partials/ (partials/landing/: le sezioni della home), pages/
 tests/               test PHPUnit
 scripts/             script Node: build del JavaScript, pacchetto di deploy, prova del pacchetto
 .github/workflows/   CI/CD
 ```
 
-Ogni richiesta passa da `public/index.php`. Il router in `src/` sceglie il controller, il controller prepara i dati, il template produce l'HTML.
+Ogni richiesta passa da `public/index.php`. Il router in `src/` sceglie il controller, il controller prepara i dati, il template produce l'HTML. `pages/home.php` compone soltanto le sezioni della landing, una per partial.
+
+Le pagine non hanno nulla in linea: niente attributi `style`, niente `<style>`, niente script scritti nella pagina. Per questo la Content-Security-Policy (`src/Http/SecurityHeaders.php`) ammette solo stili e script del sito (più i fogli di Google Fonts) e nessun sito incorporato: i ritardi delle animazioni stanno nelle classi CSS, la mappa è un disegno SVG. Lo script si aggancia agli attributi `data-*`, mai alle classi di stile, e senza JavaScript la pagina è completa.
 
 `public/index.php` trova l'applicazione così: se accanto a sé c'è la cartella `_app/` usa quella, altrimenti la radice della repo. In sviluppo l'applicazione è la repo stessa. In produzione è `public_html/_app/`, perché l'utente FTP non può scrivere sopra `public_html`.
 
@@ -43,6 +45,24 @@ build/_app/.htaccess nega ogni accesso dal browser
 La CI carica `build/` dentro `public_html`.
 
 Gli indirizzi di CSS, JavaScript e logo hanno `?v=` seguito dalla data di modifica del file: dopo un deploy il browser scarica la versione nuova.
+
+## Contenuti da confermare
+
+Orari, prezzi, cosa c'è in sala, le tre foto della sezione "Lo spazio", l'informativa privacy e i dati della società non sono ancora noti. Stanno nella sezione `content` di `config/site.php`, vuoti finché il cliente non li conferma.
+
+- Un contenuto vuoto diventa il suo segnaposto tra parentesi quadre: "[Orari da confermare]", "[Prezzi da confermare]", "[Foto: la sala, bianco e nero]".
+- `show_placeholders` è l'interruttore. Con `false` la pagina toglie tutto ciò che conterrebbe solo un segnaposto: la riga degli orari, le domande su orari e prezzi, la frase sulla sala, le foto che mancano, i dati legali. Così il sito può andare online senza segnaposto prima che arrivino i contenuti.
+- Un contenuto compilato va in pagina com'è: le foto come immagini (file in `public/assets/img/`, con larghezza, altezza e testo alternativo), l'informativa come link.
+
+"Mappa illustrativa" e "[Fasce illustrative]" non sono segnaposto: dicono il vero (la mappa è un disegno, le fasce sono esempi) e restano sempre.
+
+## Prenotazioni: l'aggancio per la fase successiva
+
+La sezione "Come funziona" mostra come si prenoterà: un gruppo di radio con le fasce di esempio, che funziona anche senza JavaScript; lo script aggiorna solo il riepilogo "La tua fascia". Prenotare dal sito non si può ancora: il bottone "Prenota il posto" è disattivato e la pagina rimanda a WhatsApp.
+
+- `booking.capacity` in `config/site.php` è il numero di posti per fascia: da lì vengono tutti i numeri della pagina (la cifra grande, i quadrati dei posti, "3/5", "posto 4 di 5"). Il testo che scrive "cinque" in lettere resta com'è.
+- In `src/Booking/`: `Slot` è una fascia (orario, posti, posti presi), `SlotCatalog` è l'interfaccia che dà le fasce alla pagina, `ExampleSlotCatalog` la implementa con le fasce di `booking.example_slots`.
+- Con le prenotazioni vere, in `Application::create()` un catalogo che legge il database prenderà il posto di `ExampleSlotCatalog`: controller e template restano come sono.
 
 ## Requisiti
 
