@@ -3,13 +3,30 @@
 .env.*
 !.env.example
 
-# Sistema operativo
+# Sistema operativo ed editor
 desktop.ini
 Thumbs.db
 .DS_Store
+.idea/
+.vscode/
 
-# Dipendenze e build locali
+# Strumenti locali (composer.phar, php.ini della macchina)
+.tools/
+
+# Dipendenze
 node_modules/
+vendor/
 
-# CSS generato da Tailwind (lo costruisce il deploy)
+# File generati dalla build (li costruisce la CI prima del deploy)
 public/assets/css/app.css
+public/assets/js/app.js
+public/assets/js/app.js.map
+build/
+
+# Cache e report degli strumenti di qualità
+.phpunit.cache/
+.phpunit.result.cache
+.php-cs-fixer.cache
+.phpstan.cache/
+.eslintcache
+coverage/
