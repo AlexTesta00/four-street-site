@@ -1,0 +1,11 @@
+# Prettier legge anche .gitignore: qui c'è solo quello che è nella repo ma non va formattato.
+
+# Lock file: li scrivono npm e Composer
+package-lock.json
+composer.lock
+
+# Composer scrive composer.json con quattro spazi
+composer.json
+
+# PHP: lo formatta PHP-CS-Fixer
+*.php

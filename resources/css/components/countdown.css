@@ -1,0 +1,120 @@
+/* ---------- Countdown ---------- */
+
+@layer components {
+  .fs-cd-box {
+    container-type: inline-size;
+    width: 100%;
+  }
+  .fs-cd {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .fs-cd__unit {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+    padding-left: clamp(12px, 4cqi, 32px);
+    border-left: 1px solid var(--color-hairline-strong);
+  }
+  .fs-cd__unit:first-child {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .fs-cd__digits {
+    display: flex;
+    font-family: var(--font-display);
+    font-size: clamp(40px, 16cqi, 120px);
+    line-height: 1;
+    font-weight: 400;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  .fs-cd__label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--color-fg-subtle);
+    white-space: nowrap;
+  }
+  .fs-cd__unit--live .fs-cd__label::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    flex: none;
+    border-radius: 9999px;
+    background: var(--color-accent);
+    animation: fs-breathe var(--duration-pulse) var(--ease-in-out-soft) infinite;
+  }
+  /* Sotto i 560px di colonna il pallino non ha spazio accanto a "SECONDI" */
+  @container (max-width: 559px) {
+    .fs-cd__unit--live .fs-cd__label::before {
+      display: none;
+    }
+    .fs-cd__label {
+      font-size: 11px;
+      font-stretch: 112%;
+      letter-spacing: 0.16em;
+    }
+  }
+  /* Ogni cella contiene la cifra uscente e quella entrante: lo script scrive i due testi e riattiva is-changing */
+  .fs-cd__cell {
+    position: relative;
+    display: block;
+    width: 0.64em;
+    height: 1em;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(
+      180deg,
+      transparent 0,
+      #000 0.06em,
+      #000 0.94em,
+      transparent 1em
+    );
+    mask-image: linear-gradient(180deg, transparent 0, #000 0.06em, #000 0.94em, transparent 1em);
+  }
+  .fs-cd__old,
+  .fs-cd__new {
+    display: block;
+    height: 1em;
+    text-align: center;
+    /* Cromo con una banda di luce che lo attraversa (fs-sheen) */
+    background-image:
+      linear-gradient(
+        90deg,
+        transparent 36%,
+        rgba(255, 255, 255, 0.92) 47%,
+        rgba(255, 255, 255, 0.92) 53%,
+        transparent 64%
+      ),
+      var(--metal-chrome);
+    background-size:
+      400% 100%,
+      100% 100%;
+    background-repeat: no-repeat;
+    background-position:
+      100% 0,
+      0 0;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .fs-cd__old {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    opacity: 0;
+  }
+  .fs-cd__new {
+    animation: fs-sheen var(--duration-sheen) var(--ease-in-out-soft) var(--sheen-delay, 2400ms)
+      infinite;
+  }
+  .fs-cd__cell.is-changing > .fs-cd__old {
+    animation: fs-digit-out var(--duration-digit) var(--ease-out-soft) both;
+  }
+  .fs-cd__cell.is-changing > .fs-cd__new {
+    animation:
+      fs-digit-in var(--duration-digit) var(--ease-out-soft) both,
+      fs-sheen var(--duration-sheen) var(--ease-in-out-soft) var(--sheen-delay, 2400ms) infinite;
+  }
+}

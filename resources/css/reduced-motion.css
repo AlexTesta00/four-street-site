@@ -1,0 +1,10 @@
+/* Chi chiede meno movimento vede la pagina già composta e ferma: niente animazioni né transizioni. */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

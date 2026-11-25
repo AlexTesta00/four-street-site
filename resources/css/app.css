@@ -1,0 +1,33 @@
+/* ------------------------------------------------------------------
+   4Street · foglio di stile (Tailwind CSS v4)
+   Punto d'ingresso: token, base, componenti, movimento.
+   L'ordine degli import è l'ordine delle regole nel CSS generato.
+   ------------------------------------------------------------------ */
+
+/* source(none): Tailwind legge solo le cartelle indicate qui sotto, non tutta la repo. */
+@import "tailwindcss" source(none);
+
+@import "./tokens.css";
+@import "./base.css";
+
+@import "./components/text.css";
+@import "./components/layout.css";
+@import "./components/buttons.css";
+@import "./components/tags.css";
+@import "./components/site-bar.css";
+@import "./components/logo.css";
+@import "./components/countdown.css";
+@import "./components/link-card.css";
+@import "./components/detail-list.css";
+@import "./components/map.css";
+@import "./components/live.css";
+@import "./components/lane.css";
+
+@import "./motion.css";
+@import "./reduced-motion.css";
+
+/* Dove stanno le classi usate: template e classi PHP, script del sito (i test no). */
+@source "../../templates";
+@source "../../src";
+@source "../js";
+@source not "../js/**/*.test.js";

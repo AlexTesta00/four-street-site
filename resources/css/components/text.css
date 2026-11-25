@@ -1,0 +1,27 @@
+/* ---------- Stili di testo ---------- */
+
+@layer components {
+  .fs-label {
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    font-stretch: 118%;
+  }
+  .fs-micro {
+    font-size: 11px;
+    line-height: 14px;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .fs-title-caps {
+    font-size: 15px;
+    line-height: 20px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-stretch: 112%;
+  }
+}

@@ -1,0 +1,15 @@
+# Fine riga LF in tutti i file di testo, anche su Windows.
+* text=auto eol=lf
+
+# File binari: nessuna conversione e nessun diff testuale.
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.gif binary
+*.webp binary
+*.avif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.phar binary

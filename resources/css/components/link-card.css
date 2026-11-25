@@ -1,0 +1,88 @@
+/* ---------- LinkCard ---------- */
+
+@layer components {
+  .fs-link {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-height: 72px;
+    padding: 12px 20px;
+    background: var(--color-panel);
+    border: 1px solid var(--color-hairline-strong);
+    box-shadow: var(--edge);
+    color: var(--color-fg);
+    text-decoration: none;
+    transition:
+      background-color var(--duration-fast) var(--ease-out-soft),
+      border-color var(--duration-fast) var(--ease-out-soft),
+      transform var(--duration-press) var(--ease-out-soft);
+  }
+  a.fs-link:hover {
+    background: var(--color-panel-hover);
+    border-color: var(--color-control);
+  }
+  a.fs-link:active {
+    transform: translateY(1px);
+  }
+  .fs-link__icon {
+    width: 24px;
+    height: 24px;
+    flex: none;
+    color: var(--color-fg-muted);
+  }
+  .fs-link__body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .fs-link__meta {
+    color: var(--color-fg-muted);
+    font-size: 14px;
+    line-height: 20px;
+    overflow-wrap: anywhere;
+  }
+  .fs-link__arrow {
+    width: 20px;
+    height: 20px;
+    flex: none;
+    color: var(--color-fg-muted);
+    transition:
+      transform var(--duration-fast) var(--ease-out-soft),
+      color var(--duration-fast) var(--ease-out-soft);
+  }
+  a.fs-link:hover .fs-link__arrow {
+    transform: translate(2px, -2px);
+    color: var(--color-fg);
+  }
+  .fs-link__aside {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    flex: none;
+  }
+  .fs-link--featured {
+    background: var(--color-accent-tint);
+    border-color: var(--color-accent-line);
+  }
+  .fs-link--featured .fs-link__icon,
+  .fs-link--featured .fs-title-caps {
+    color: var(--color-accent);
+  }
+  a.fs-link--featured:hover {
+    background: var(--color-accent-tint);
+    border-color: var(--color-accent);
+  }
+  .fs-link--soon {
+    background: transparent;
+    border-color: var(--color-hairline);
+    box-shadow: none;
+    color: var(--color-fg-subtle);
+  }
+  .fs-link--soon .fs-link__icon,
+  .fs-link--soon .fs-link__meta {
+    color: var(--color-fg-subtle);
+  }
+}

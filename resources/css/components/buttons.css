@@ -1,0 +1,82 @@
+/* ---------- Button ---------- */
+
+@layer components {
+  .fs-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    height: 52px;
+    padding: 0 24px;
+    border: 1px solid transparent;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 16px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-stretch: 112%;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color var(--duration-fast) var(--ease-out-soft),
+      border-color var(--duration-fast) var(--ease-out-soft),
+      color var(--duration-fast) var(--ease-out-soft),
+      transform var(--duration-press) var(--ease-out-soft);
+  }
+  .fs-btn:active {
+    transform: translateY(1px);
+  }
+  .fs-btn svg {
+    width: 16px;
+    height: 16px;
+    flex: none;
+  }
+  .fs-btn__arrow {
+    transition: transform var(--duration-fast) var(--ease-out-soft);
+  }
+  .fs-btn:hover .fs-btn__arrow {
+    transform: translate(2px, -2px);
+  }
+  .fs-btn__label {
+    background-image: linear-gradient(currentColor, currentColor);
+    background-size: 0% 1px;
+    background-position: 0 100%;
+    background-repeat: no-repeat;
+    padding-bottom: 2px;
+    transition: background-size var(--duration-base) var(--ease-out-soft);
+  }
+  .fs-btn:hover .fs-btn__label {
+    background-size: 100% 1px;
+  }
+  .fs-btn--primary {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-on-accent);
+  }
+  .fs-btn--primary:hover {
+    background: var(--color-accent-hover);
+    border-color: var(--color-accent-hover);
+  }
+  .fs-btn--secondary {
+    background: transparent;
+    border-color: var(--color-control);
+    color: var(--color-fg);
+  }
+  .fs-btn--secondary:hover {
+    background: var(--color-panel);
+    border-color: var(--color-fg);
+  }
+  .fs-btn--ghost {
+    background: transparent;
+    color: var(--color-fg);
+    padding: 0 8px;
+  }
+  .fs-btn--ghost:hover {
+    color: var(--color-accent);
+  }
+  .fs-btn--sm {
+    height: 44px;
+  }
+}

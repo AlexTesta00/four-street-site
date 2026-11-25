@@ -1,0 +1,70 @@
+/* ------------------------------------------------------------------
+   4Street · design token (asphalt / chrome / gold)
+   @theme genera anche le utility di Tailwind (text-fg, font-display…);
+   :root tiene i token usati solo dai componenti.
+   ------------------------------------------------------------------ */
+
+@theme {
+  /* Fondi */
+  --color-asphalt-950: #0b0b0a;
+  --color-asphalt-900: #131312;
+  --color-asphalt-850: #1a1a18;
+  --color-asphalt-800: #242422;
+  --color-asphalt-700: #33332f;
+  /* Testi */
+  --color-chrome-600: #76777a;
+  --color-chrome-500: #8e8f92;
+  --color-chrome-300: #bebfc2;
+  --color-chrome-100: #e2e3e5;
+  --color-chrome-50: #f3f3f4;
+  /* Accento */
+  --color-gold-300: #e2c78e;
+  --color-gold-400: #cdaa66;
+  --color-gold-600: #8a6f3a;
+  --color-gold-950: #1f190e;
+
+  /* Nomi semantici */
+  --color-canvas: var(--color-asphalt-950);
+  --color-panel: var(--color-asphalt-900);
+  --color-panel-hover: var(--color-asphalt-850);
+  --color-hairline: var(--color-asphalt-800);
+  --color-hairline-strong: var(--color-asphalt-700);
+  --color-control: var(--color-chrome-600);
+  --color-fg: var(--color-chrome-50);
+  --color-fg-muted: var(--color-chrome-300);
+  --color-fg-subtle: var(--color-chrome-500);
+  --color-accent: var(--color-gold-400);
+  --color-accent-hover: var(--color-gold-300);
+  --color-accent-line: var(--color-gold-600);
+  --color-accent-tint: var(--color-gold-950);
+  --color-on-accent: var(--color-asphalt-950);
+
+  --font-sans: Archivo, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Bodoni Moda", "Bodoni 72", Didot, "Times New Roman", serif;
+
+  --ease-out-soft: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+:root {
+  /* Movimento */
+  --duration-press: 120ms;
+  --duration-fast: 200ms;
+  --duration-base: 360ms;
+  --duration-digit: 560ms;
+  --duration-pin: 600ms;
+  --duration-enter: 720ms;
+  --duration-reveal: 1200ms;
+  --duration-settle: 1600ms;
+  --duration-lane: 1600ms;
+  --duration-pulse: 2400ms;
+  --duration-sheen: 8000ms;
+  --duration-drift: 24000ms;
+  --duration-tick: 60000ms;
+  --duration-stagger: 90ms;
+
+  --metal-chrome: linear-gradient(180deg, #ffffff 0%, #e2e3e5 40%, #8e8f92 64%, #f3f3f4 100%);
+  --focus-ring: 0 0 0 2px #0b0b0a, 0 0 0 4px #cdaa66;
+  --edge: inset 0 1px 0 #ffffff0f;
+  --gutter: clamp(20px, 5.6vw, 80px);
+}

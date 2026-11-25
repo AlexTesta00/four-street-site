@@ -1,0 +1,24 @@
+/* Base: fondo scuro su tutta la pagina, corpo a colonna, focus da tastiera. */
+
+@layer base {
+  html {
+    background: var(--color-canvas);
+    color-scheme: dark;
+  }
+  body {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    background: var(--color-canvas);
+    color: var(--color-fg);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+  a:focus-visible,
+  button:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+}

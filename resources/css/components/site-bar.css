@@ -1,0 +1,38 @@
+/* ---------- SiteBar ---------- */
+
+@layer components {
+  .fs-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 56px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--color-hairline);
+  }
+  @media (min-width: 768px) {
+    .fs-bar {
+      min-height: 72px;
+    }
+  }
+  .fs-bar__mark {
+    display: inline-flex;
+    align-items: center;
+    height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--color-hairline-strong);
+    color: var(--color-fg);
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    font-stretch: 125%;
+    text-decoration: none;
+    transition: border-color var(--duration-fast) var(--ease-out-soft);
+  }
+  .fs-bar__mark:hover {
+    border-color: var(--color-fg);
+  }
+}

@@ -1,0 +1,226 @@
+/* ---------- Movimento ----------
+   Lo stato di riposo di ogni elemento è quello finale: gli ingressi usano fill-mode backwards,
+   quindi senza animazioni o con prefers-reduced-motion la pagina resta completa e ferma. */
+
+@layer components {
+  .fs-anim-rise {
+    animation: fs-rise var(--duration-enter) var(--ease-out-soft) backwards;
+  }
+  .fs-anim-fade {
+    animation: fs-fade var(--duration-enter) var(--ease-out-soft) backwards;
+  }
+  .fs-anim-wipe-up {
+    animation: fs-wipe-up var(--duration-reveal) var(--ease-in-out-soft) backwards;
+  }
+  .fs-anim-wipe-right {
+    animation: fs-wipe-right var(--duration-lane) var(--ease-in-out-soft) backwards;
+  }
+  /* Sull'immagine del logo: si assesta mentre la figura si scopre, poi deriva lentamente */
+  .fs-anim-image {
+    animation:
+      fs-settle var(--duration-settle) var(--ease-out-soft) 90ms backwards,
+      fs-drift var(--duration-drift) var(--ease-in-out-soft) 1690ms infinite alternate;
+  }
+  .fs-anim-breathe {
+    animation: fs-breathe var(--duration-pulse) var(--ease-in-out-soft) infinite;
+  }
+  .fs-anim-pin {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: fs-pin-in var(--duration-pin) var(--ease-out-soft) backwards;
+  }
+  .fs-anim-pulse {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: fs-pulse var(--duration-pulse) var(--ease-out-soft) infinite;
+  }
+  .fs-anim-tick {
+    transform-box: view-box;
+    transform-origin: 12px 12px;
+    animation: fs-tick var(--duration-tick) linear infinite;
+  }
+
+  .fs-step-1 {
+    animation-delay: calc(var(--duration-stagger) * 1);
+  }
+  .fs-step-2 {
+    animation-delay: calc(var(--duration-stagger) * 2);
+  }
+  .fs-step-3 {
+    animation-delay: calc(var(--duration-stagger) * 3);
+  }
+  .fs-step-4 {
+    animation-delay: calc(var(--duration-stagger) * 4);
+  }
+  .fs-step-5 {
+    animation-delay: calc(var(--duration-stagger) * 5);
+  }
+  .fs-step-6 {
+    animation-delay: calc(var(--duration-stagger) * 6);
+  }
+  .fs-step-7 {
+    animation-delay: calc(var(--duration-stagger) * 7);
+  }
+  .fs-step-8 {
+    animation-delay: calc(var(--duration-stagger) * 8);
+  }
+  .fs-step-9 {
+    animation-delay: calc(var(--duration-stagger) * 9);
+  }
+  .fs-step-10 {
+    animation-delay: calc(var(--duration-stagger) * 10);
+  }
+  .fs-step-11 {
+    animation-delay: calc(var(--duration-stagger) * 11);
+  }
+  .fs-step-12 {
+    animation-delay: calc(var(--duration-stagger) * 12);
+  }
+  .fs-step-14 {
+    animation-delay: calc(var(--duration-stagger) * 14);
+  }
+  .fs-step-16 {
+    animation-delay: calc(var(--duration-stagger) * 16);
+  }
+
+  /* Allo zero il countdown esce (sfuma e sale), poi entra lo stato "Ci siamo" */
+  .fs-stage.is-leaving {
+    animation: fs-leave 600ms var(--ease-in-out-soft) forwards;
+  }
+}
+
+@keyframes fs-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fs-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes fs-leave {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-24px);
+  }
+}
+@keyframes fs-wipe-up {
+  from {
+    clip-path: inset(100% 0 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes fs-wipe-right {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes fs-settle {
+  from {
+    transform: scale(1.08);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+@keyframes fs-drift {
+  from {
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.04) translate3d(-1%, -0.8%, 0);
+  }
+}
+@keyframes fs-sheen {
+  0% {
+    background-position:
+      100% 0,
+      0 0;
+  }
+  22% {
+    background-position:
+      0% 0,
+      0 0;
+  }
+  100% {
+    background-position:
+      0% 0,
+      0 0;
+  }
+}
+@keyframes fs-digit-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-0.6em);
+  }
+}
+@keyframes fs-digit-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.6em);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fs-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+@keyframes fs-pin-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes fs-pulse {
+  0% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(2.2);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.2);
+  }
+}
+@keyframes fs-tick {
+  to {
+    transform: rotate(360deg);
+  }
+}

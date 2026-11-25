@@ -1,14 +1,49 @@
 {
-  "name": "fourstreet-site",
+  "name": "four-street-site",
   "private": true,
   "description": "Sito di 4Street, palestra a San Marino",
+  "type": "module",
+  "engines": {
+    "node": ">=26"
+  },
   "scripts": {
-    "build": "tailwindcss -i ./src/css/app.css -o ./public/assets/css/app.css --minify",
-    "dev": "tailwindcss -i ./src/css/app.css -o ./public/assets/css/app.css --watch",
-    "serve": "php -S localhost:8000 -t public"
+    "prepare": "node .husky/install.mjs",
+    "build": "npm run build:css && npm run build:js",
+    "build:css": "tailwindcss -i resources/css/app.css -o public/assets/css/app.css --minify",
+    "build:js": "node scripts/build-js.mjs",
+    "dev": "run-p dev:css dev:js",
+    "dev:css": "tailwindcss -i resources/css/app.css -o public/assets/css/app.css --watch=always",
+    "dev:js": "node scripts/build-js.mjs --watch",
+    "serve": "php -S localhost:8000 -t public public/index.php",
+    "lint": "eslint . --max-warnings=0",
+    "format": "prettier --write . --ignore-path .gitignore --ignore-path .prettierignore --ignore-path .git/info/exclude",
+    "format:check": "prettier --check . --ignore-path .gitignore --ignore-path .prettierignore --ignore-path .git/info/exclude",
+    "test": "node --test \"resources/js/**/*.test.js\"",
+    "check": "npm run lint && npm run format:check && npm test && npm run build",
+    "assemble": "npm run build && node scripts/assemble.mjs",
+    "smoke": "node scripts/smoke-test.mjs"
+  },
+  "lint-staged": {
+    "*.{js,mjs,cjs}": [
+      "eslint --fix --max-warnings=0 --no-warn-ignored",
+      "prettier --write"
+    ],
+    "*.{css,json,md,yml,yaml}": "prettier --write"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
+    "@eslint/js": "^10.0.1",
     "@tailwindcss/cli": "^4.3.5",
+    "conventional-changelog-conventionalcommits": "^9.3.1",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.1",
+    "npm-run-all2": "^9.0.4",
+    "prettier": "^3.10.1",
+    "semantic-release": "^25.0.9",
     "tailwindcss": "^4.3.5"
   }
 }

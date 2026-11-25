@@ -1,0 +1,8 @@
+/* ---------- Margini laterali della pagina ---------- */
+
+@layer components {
+  .fs-gutter {
+    padding-left: var(--gutter);
+    padding-right: var(--gutter);
+  }
+}
