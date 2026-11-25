@@ -1,0 +1,310 @@
+name: CI/CD
+
+# Controlli di qualità a ogni push su develop e main e a ogni pull request.
+# Solo un push su main (o un avvio manuale su main) pubblica il sito su Hostinger,
+# e solo dopo che tutti i controlli sono passati, con lo stesso pacchetto già provato.
+# Nello stesso caso semantic-release crea il tag e la GitHub Release.
+# Da develop e dalle pull request non parte mai un deploy.
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Prova a vuoto: mostra cosa verrebbe caricato senza modificare il server"
+        type: boolean
+        default: false
+
+# Su develop e nelle pull request un push nuovo annulla l'esecuzione precedente.
+# Su main un'esecuzione partita non si interrompe mai: potrebbe essere a metà del deploy.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+# Nessun permesso di base: ogni job chiede solo quello che gli serve.
+permissions: {}
+
+jobs:
+  php:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # 8.3 è la versione di produzione su Hostinger; 8.4 mostra in anticipo cosa cambia.
+        php: ["8.3", "8.4"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring
+          ini-file: development
+          coverage: none
+          tools: composer:v2
+
+      - name: composer.json valido
+        run: composer validate --strict
+
+      - name: Cartella della cache di Composer
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache di Composer
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-php${{ matrix.php }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-php${{ matrix.php }}-
+
+      - name: Dipendenze
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Stile (PHP-CS-Fixer)
+        run: composer lint
+
+      - name: Analisi statica (PHPStan)
+        run: composer analyse
+
+      - name: Test (PHPUnit)
+        run: composer test
+
+  frontend:
+    name: Front-end
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Dipendenze
+        run: npm ci
+
+      - name: Lint (ESLint)
+        run: npm run lint
+
+      - name: Formattazione (Prettier)
+        run: npm run format:check
+
+      - name: Test JavaScript
+        run: npm test
+
+      - name: Build di CSS e JavaScript
+        run: npm run build
+
+  commits:
+    name: Messaggi di commit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout con tutta la storia
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Dipendenze
+        run: npm ci
+
+      - name: Conventional Commits (commitlint)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          case "$EVENT_NAME" in
+            pull_request)
+              from="$PR_BASE"
+              to="$PR_HEAD"
+              ;;
+            push)
+              to="$PUSH_AFTER"
+              if [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ] &&
+                git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then
+                from="$PUSH_BEFORE"
+              else
+                # Ramo nuovo o storia riscritta: i commit che non sono ancora su main.
+                from="$(git merge-base origin/main "$PUSH_AFTER")"
+              fi
+              ;;
+            *)
+              # Avvio manuale: si controlla l'ultimo commit.
+              npx commitlint --last --verbose
+              exit 0
+              ;;
+          esac
+          if [ "$from" = "$to" ]; then
+            echo "Nessun commit nuovo da controllare."
+            exit 0
+          fi
+          npx commitlint --from "$from" --to "$to" --verbose
+
+  bundle:
+    name: Pacchetto di deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: PHP 8.3, come in produzione
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring
+          ini-file: production
+          coverage: none
+          tools: composer:v2
+
+      - name: Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Dipendenze
+        run: npm ci
+
+      # CSS e JavaScript, poi build/ con l'applicazione in build/_app e vendor senza pacchetti dev.
+      - name: Pacchetto build/
+        run: npm run assemble
+
+      # Server PHP integrato su build/ con build/index.php come router: pagine, asset, 404.
+      - name: Prova del pacchetto
+        run: npm run smoke
+
+      - name: Artefatto build/
+        uses: actions/upload-artifact@v7
+        with:
+          name: site-build
+          path: build/
+          # Senza questa opzione i .htaccess resterebbero fuori dall'artefatto.
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy:
+    name: Deploy su Hostinger
+    needs: [php, frontend, commits, bundle]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions: {}
+    environment:
+      name: production
+      url: https://fourstreet.studio
+    # Un deploy alla volta, e mai interrotto a metà.
+    concurrency:
+      group: deploy-hostinger
+      cancel-in-progress: false
+    steps:
+      - name: Pacchetto provato dal job "Pacchetto di deploy"
+        uses: actions/download-artifact@v8
+        with:
+          name: site-build
+          path: build/
+
+      # Carica il contenuto di build/ dentro la cartella public_html già esistente su Hostinger.
+      # Il deploy è incrementale: l'action tiene sul server un file di stato
+      # (.ftp-deploy-sync-state.json) e a ogni run carica solo i file nuovi o modificati
+      # ed elimina solo quelli che lei stessa aveva caricato e che non ci sono più nel pacchetto.
+      # Tutto ciò che c'è già in public_html e non proviene dalla repo non viene toccato.
+      - name: Sync incrementale via FTPS
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          port: ${{ secrets.FTP_PORT }}
+          protocol: ftps
+          local-dir: ./build/
+          # L'utente FTP entra direttamente dentro public_html: la destinazione è la cartella di login.
+          server-dir: ./
+          # Mai svuotare public_html prima del caricamento.
+          dangerous-clean-slate: false
+          dry-run: ${{ inputs.dry_run || false }}
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            **/.env*
+            **/desktop.ini
+
+      - name: Il sito risponde
+        env:
+          SITE_URL: https://fourstreet.studio
+        run: |
+          for path in / /links/ /calendario.php; do
+            status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+              --retry 5 --retry-delay 10 --retry-all-errors --max-time 30 "$SITE_URL$path")
+            echo "$SITE_URL$path risponde $status"
+            if [ "$status" != "200" ]; then
+              echo "::error::$SITE_URL$path risponde $status invece di 200"
+              exit 1
+            fi
+          done
+
+  release:
+    name: Release
+    needs: [php, frontend, commits, bundle]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      # Tag e GitHub Release.
+      contents: write
+      # Issue di avviso se il rilascio fallisce.
+      issues: write
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    steps:
+      - name: Checkout con tutta la storia e i tag
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Dipendenze
+        run: npm ci
+
+      # Legge i commit dall'ultimo tag, decide la versione, crea tag e GitHub Release.
+      # Nessun commit di bot: niente changelog né version bump nella repo.
+      - name: semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release

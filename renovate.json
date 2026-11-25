@@ -1,0 +1,40 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommitTypeAll(chore)",
+    "helpers:pinGitHubActionDigests",
+    "security:minimumReleaseAgeNpm"
+  ],
+  "baseBranchPatterns": ["develop"],
+  "timezone": "Europe/Rome",
+  "schedule": ["* 0-5 * * 1"],
+  "semanticCommits": "enabled",
+  "semanticCommitScope": "deps",
+  "automerge": false,
+  "dependencyDashboard": { "enabled": true },
+  "enabledManagers": ["npm", "composer", "github-actions"],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["* 0-5 * * 1"]
+  },
+  "packageRules": [
+    {
+      "description": "Strumenti di sviluppo npm (build, lint, test, rilascio) in una sola PR",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["devDependencies"],
+      "groupName": "npm dev tooling"
+    },
+    {
+      "description": "Strumenti di sviluppo Composer (PHPUnit, PHPStan, PHP-CS-Fixer) in una sola PR",
+      "matchManagers": ["composer"],
+      "matchDepTypes": ["require-dev"],
+      "groupName": "Composer dev tooling"
+    },
+    {
+      "description": "Azioni dei workflow GitHub in una sola PR",
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions"
+    }
+  ]
+}

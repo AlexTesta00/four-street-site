@@ -1,0 +1,29 @@
+{
+  "branches": ["main"],
+  "tagFormat": "v${version}",
+  "plugins": [
+    ["@semantic-release/commit-analyzer", { "preset": "conventionalcommits" }],
+    [
+      "@semantic-release/release-notes-generator",
+      {
+        "preset": "conventionalcommits",
+        "presetConfig": {
+          "types": [
+            { "type": "feat", "section": "Novità" },
+            { "type": "fix", "section": "Correzioni" },
+            { "type": "perf", "section": "Prestazioni" },
+            { "type": "revert", "section": "Ripristini" },
+            { "type": "docs", "hidden": true },
+            { "type": "style", "hidden": true },
+            { "type": "refactor", "hidden": true },
+            { "type": "test", "hidden": true },
+            { "type": "build", "hidden": true },
+            { "type": "ci", "hidden": true },
+            { "type": "chore", "hidden": true }
+          ]
+        }
+      }
+    ],
+    ["@semantic-release/github", { "successComment": false, "releasedLabels": false }]
+  ]
+}
