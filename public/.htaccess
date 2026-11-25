@@ -1,0 +1,53 @@
+# 4Street: tutte le pagine passano da index.php; i file statici esistenti li serve il server.
+# Compatibile con Apache 2.4 e LiteSpeed. Le intestazioni di sicurezza delle pagine le imposta PHP
+# (src/Http/SecurityHeaders.php); qui ci sono solo quelle dei file statici.
+
+DirectoryIndex index.php
+
+# Niente elenco dei file nelle cartelle.
+<IfModule mod_autoindex.c>
+  Options -Indexes
+</IfModule>
+
+# Niente negoziazione dei contenuti (/index non deve diventare /index.php).
+<IfModule mod_negotiation.c>
+  Options -MultiViews
+</IfModule>
+
+# File nascosti (.env, .htaccess, .git…): mai raggiungibili, anche senza mod_rewrite.
+<FilesMatch "^\.">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Cartelle nascoste: vietate. Resta aperta solo .well-known (rinnovo dei certificati SSL).
+  RewriteCond %{REQUEST_URI} !^/\.well-known/
+  RewriteRule (^|/)\. - [F]
+
+  # Il codice dell'applicazione nel pacchetto di deploy (_app/ ha anche il suo .htaccess).
+  RewriteRule ^_app(/|$) - [F]
+
+  # Asset con ?v=<mtime>: l'URL cambia a ogni deploy, quindi possono restare in cache a lungo.
+  RewriteCond %{QUERY_STRING} (^|&)v=[0-9]+(&|$)
+  RewriteRule ^assets/ - [E=FS_VERSIONED_ASSET:1]
+
+  # Tutto ciò che non è un file esistente va al front controller (anche le cartelle: niente elenchi).
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^ index.php [L]
+</IfModule>
+
+# Solo file statici: le risposte di index.php hanno già le loro intestazioni.
+<IfModule mod_headers.c>
+  <FilesMatch "\.(css|js|mjs|map|jpe?g|png|gif|webp|avif|svg|ico|woff2?)$">
+    Header set X-Content-Type-Options "nosniff"
+    Header set Cache-Control "public, max-age=31536000, immutable" env=FS_VERSIONED_ASSET
+  </FilesMatch>
+</IfModule>

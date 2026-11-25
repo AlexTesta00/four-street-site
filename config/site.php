@@ -1,10 +1,15 @@
 <?php
+
+declare(strict_types=1);
+
 // Contenuti del sito: tutto ciò che il cliente può voler cambiare sta qui.
+// Un valore non valido ferma il sito con un messaggio che dice cosa correggere.
 return [
     'name' => '4Street',
     'timezone' => 'Europe/Rome',
 
-    // Data e ora dell'inaugurazione (ora locale di San Marino): il countdown scade qui.
+    // Data e ora dell'inaugurazione (ora locale di San Marino), nel formato AAAA-MM-GG HH:MM:
+    // il countdown scade qui.
     'opening' => '2026-12-06 15:00',
     // Metti true quando l'orario qui sopra è quello vero: solo allora viene mostrato in pagina
     // e inserito nell'evento del calendario (altrimenti l'evento dura tutto il giorno).
