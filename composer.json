@@ -4,9 +4,15 @@
     "type": "project",
     "license": "proprietary",
     "require": {
-        "php": "^8.3"
+        "php": "^8.3",
+        "ext-mbstring": "*",
+        "ext-openssl": "*",
+        "ext-pdo": "*",
+        "ext-pdo_mysql": "*",
+        "symfony/mailer": "^7.4"
     },
     "require-dev": {
+        "ext-pdo_sqlite": "*",
         "friendsofphp/php-cs-fixer": "^3.95",
         "phpstan/phpstan": "^2.3",
         "phpstan/phpstan-phpunit": "^2.1",
@@ -34,17 +40,23 @@
         "format": "php-cs-fixer fix",
         "analyse": "phpstan analyse --no-progress --memory-limit=1G",
         "test": "phpunit",
+        "test:database": "phpunit --group database",
         "check": [
             "@lint",
             "@analyse",
             "@test"
-        ]
+        ],
+        "console": "@php bin/console",
+        "migrate": "@php bin/console migrate"
     },
     "scripts-descriptions": {
         "lint": "Controlla lo stile del codice PHP senza modificarlo (PHP-CS-Fixer).",
         "format": "Sistema lo stile del codice PHP (PHP-CS-Fixer).",
         "analyse": "Analisi statica al livello massimo (PHPStan).",
         "test": "Esegue i test (PHPUnit).",
-        "check": "Stile, analisi statica e test: quello che esegue la CI."
+        "test:database": "Solo i test del database: con FOURSTREET_TEST_DATABASE_DSN girano su MySQL o MariaDB.",
+        "check": "Stile, analisi statica e test: quello che esegue la CI.",
+        "console": "La console dell'applicazione: composer console -- <comando>.",
+        "migrate": "Applica al database le migrazioni che mancano."
     }
 }

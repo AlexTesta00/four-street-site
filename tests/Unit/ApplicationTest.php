@@ -15,7 +15,12 @@ use FourStreet\Http\Routing\RouteFound;
 use FourStreet\Http\Routing\RouteNotFound;
 use FourStreet\Http\Routing\Router;
 use FourStreet\Http\SecurityHeaders;
+use FourStreet\Mail\Mailbox;
+use FourStreet\Mail\Mailer;
+use FourStreet\Mail\Message;
+use FourStreet\Mail\Outbox;
 use FourStreet\Tests\Support\CollectingReporter;
+use FourStreet\Tests\Support\InMemoryMailer;
 use FourStreet\Tests\Support\StubController;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -23,6 +28,9 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(Application::class)]
+#[UsesClass(Outbox::class)]
+#[UsesClass(Mailbox::class)]
+#[UsesClass(Message::class)]
 #[UsesClass(RedirectController::class)]
 #[UsesClass(Request::class)]
 #[UsesClass(Response::class)]
@@ -118,7 +126,45 @@ final class ApplicationTest extends TestCase
         self::assertSame('Segreto del server.', $this->reporter->reported[0]->getMessage());
     }
 
-    private function application(): Application
+    public function testTheQueuedEmailsLeaveOnlyWhenTheResponseIsDone(): void
+    {
+        $mailer = new InMemoryMailer();
+        $outbox = new Outbox($mailer, $this->reporter);
+        $application = $this->application($outbox);
+        $outbox->queue(new Message(new Mailbox('mario@example.com'), 'Scegli una nuova password', "Ciao,\necco il link.\n"));
+
+        $application->handle(Request::create('GET', '/corsi/yoga'));
+        self::assertSame([], $mailer->sentTo('mario@example.com'));
+
+        $application->finish();
+        self::assertCount(1, $mailer->sentTo('mario@example.com'));
+    }
+
+    public function testAnErrorAfterTheResponseIsOnlyReported(): void
+    {
+        $broken = new class implements Mailer {
+            public function send(Message $message): void
+            {
+                throw new LogicException('Errore dopo la risposta.');
+            }
+        };
+        $outbox = new Outbox($broken, $this->reporter);
+        $outbox->queue(new Message(new Mailbox('mario@example.com'), 'Prova', "Ciao.\n"));
+
+        $this->application($outbox)->finish();
+
+        self::assertCount(1, $this->reporter->reported);
+        self::assertSame('Errore dopo la risposta.', $this->reporter->reported[0]->getMessage());
+    }
+
+    public function testWithoutAnOutboxThereIsNothingToFinish(): void
+    {
+        $this->application()->finish();
+
+        self::assertSame([], $this->reporter->reported);
+    }
+
+    private function application(?Outbox $outbox = null): Application
     {
         $broken = new StubController(respond: static fn(Request $request): Response => throw new LogicException('Segreto del server.'));
 
@@ -131,6 +177,7 @@ final class ApplicationTest extends TestCase
             $this->notFound,
             SecurityHeaders::forSite(),
             $this->reporter,
+            $outbox,
         );
     }
 }

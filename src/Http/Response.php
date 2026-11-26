@@ -59,6 +59,15 @@ final readonly class Response
         return new self($status, ['Location' => $location]);
     }
 
+    /**
+     * 303 See Other: dopo un modulo inviato con successo il browser apre la pagina con GET,
+     * così ricaricare non invia di nuovo i dati.
+     */
+    public static function seeOther(string $location): self
+    {
+        return self::redirect($location, 303);
+    }
+
     public function hasHeader(string $name): bool
     {
         return isset($this->headers[strtolower($name)]);
@@ -107,6 +116,32 @@ final readonly class Response
             [...$this->headersExcept($name), $current['name'] => [...$current['values'], $value]],
             $this->body,
         );
+    }
+
+    /**
+     * Aggiunge un Set-Cookie, senza togliere quelli già presenti.
+     */
+    public function withCookie(Cookie $cookie): self
+    {
+        return $this->withAddedHeader('Set-Cookie', $cookie->headerValue());
+    }
+
+    /**
+     * La risposta imposta già il cookie con quel nome (per crearlo, rinnovarlo o cancellarlo).
+     */
+    public function setsCookie(string $name): bool
+    {
+        $header = $this->headers['set-cookie'] ?? null;
+        if ($header === null) {
+            return false;
+        }
+        foreach ($header['values'] as $value) {
+            if (str_starts_with($value, $name . '=')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

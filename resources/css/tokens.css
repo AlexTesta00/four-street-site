@@ -38,6 +38,9 @@
   --color-accent-line: var(--color-gold-600);
   --color-accent-tint: var(--color-gold-950);
   --color-on-accent: var(--color-asphalt-950);
+  /* Stati dei moduli e degli avvisi (dal design system): contrasto AA su canvas e panel */
+  --color-danger: #f08a6c;
+  --color-success: #8cc4d8;
 
   --font-sans: Archivo, "Helvetica Neue", Arial, sans-serif;
   --font-display: "Bodoni Moda", "Bodoni 72", Didot, "Times New Roman", serif;

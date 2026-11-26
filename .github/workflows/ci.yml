@@ -47,7 +47,8 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: mbstring
+          # pdo_sqlite per i test (SQLite in memoria), pdo_mysql perché la produzione usa MySQL/MariaDB.
+          extensions: mbstring, pdo_sqlite, pdo_mysql
           ini-file: development
           coverage: none
           tools: composer:v2
@@ -77,6 +78,90 @@ jobs:
 
       - name: Test (PHPUnit)
         run: composer test
+
+  # Le migrazioni e i test del gruppo "database" (repository PDO, schema, limiti dei tentativi) su un
+  # MariaDB vero, come quello di Hostinger: lo stesso SQL deve funzionare su SQLite e su MySQL/MariaDB.
+  database:
+    name: Database MariaDB
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_DATABASE: fourstreet_test
+          MARIADB_USER: fourstreet
+          MARIADB_PASSWORD: fourstreet
+          MARIADB_ROOT_PASSWORD: fourstreet-root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      # Il database dei test (tests/Support/TestDatabase.php): le credenziali del servizio qui sopra.
+      FOURSTREET_TEST_DATABASE_DSN: mysql:host=127.0.0.1;port=3306;dbname=fourstreet_test
+      FOURSTREET_TEST_DATABASE_USERNAME: fourstreet
+      FOURSTREET_TEST_DATABASE_PASSWORD: fourstreet
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: PHP 8.3, come in produzione
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring, pdo_sqlite, pdo_mysql
+          ini-file: development
+          coverage: none
+          tools: composer:v2
+
+      - name: Cartella della cache di Composer
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache di Composer
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-php8.3-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-php8.3-
+
+      - name: Dipendenze
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      # Una configurazione locale fuori dalla repo, solo per questo job: la console la trova con
+      # FOURSTREET_LOCAL_CONFIG. La chiave segreta nasce a ogni esecuzione e non esce dal runner.
+      - name: Configurazione locale verso MariaDB
+        run: |
+          cat > "$RUNNER_TEMP/local.php" <<'PHP'
+          <?php
+
+          return [
+              'secret' => bin2hex(random_bytes(32)),
+              'database' => [
+                  'dsn' => 'mysql:host=127.0.0.1;port=3306;dbname=fourstreet_test',
+                  'username' => 'fourstreet',
+                  'password' => 'fourstreet',
+              ],
+              'mail' => ['transport' => 'file', 'directory' => sys_get_temp_dir() . '/4street-mail', 'from' => 'ci@fourstreet.studio'],
+          ];
+          PHP
+          echo "FOURSTREET_LOCAL_CONFIG=$RUNNER_TEMP/local.php" >> "$GITHUB_ENV"
+
+      - name: Migrazioni (bin/console migrate)
+        run: php bin/console migrate
+
+      - name: Migrazioni rilanciate, nessuna da applicare
+        run: php bin/console migrate | tee /dev/stderr | grep -q "già aggiornato"
+
+      - name: Test del database (PHPUnit, gruppo database)
+        run: vendor/bin/phpunit --group database
 
   frontend:
     name: Front-end
@@ -181,7 +266,8 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.3"
-          extensions: mbstring
+          # pdo_mysql la chiede composer.json; pdo_sqlite serve alla prova con la configurazione locale temporanea.
+          extensions: mbstring, pdo_sqlite, pdo_mysql
           ini-file: production
           coverage: none
           tools: composer:v2
@@ -199,7 +285,9 @@ jobs:
       - name: Pacchetto build/
         run: npm run assemble
 
-      # Server PHP integrato su build/ con build/index.php come router: pagine, asset, 404.
+      # Server PHP integrato su build/ con build/index.php come router: pagine, asset, 404, area clienti
+      # non configurata (503); poi, con una configurazione locale temporanea fuori da build/, migrazioni,
+      # registrazione, email e conferma. build/ deve restare identica.
       - name: Prova del pacchetto
         run: npm run smoke
 
@@ -215,7 +303,7 @@ jobs:
 
   deploy:
     name: Deploy su Hostinger
-    needs: [php, frontend, commits, bundle]
+    needs: [php, database, frontend, commits, bundle]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions: {}
@@ -252,12 +340,16 @@ jobs:
           # Mai svuotare public_html prima del caricamento.
           dangerous-clean-slate: false
           dry-run: ${{ inputs.dry_run || false }}
+          # config/local.php (database, posta e chiave del server) e var/ non sono mai nel pacchetto:
+          # escluderli anche qui garantisce che il deploy non li carichi né li cancelli mai.
           exclude: |
             **/.git*
             **/.git*/**
             **/node_modules/**
             **/.env*
             **/desktop.ini
+            **/config/local.php
+            **/var/**
 
       - name: Il sito risponde
         env:
@@ -275,7 +367,7 @@ jobs:
 
   release:
     name: Release
-    needs: [php, frontend, commits, bundle]
+    needs: [php, database, frontend, commits, bundle]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:

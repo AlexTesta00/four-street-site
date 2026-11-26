@@ -7,6 +7,7 @@ namespace FourStreet\Config;
 use RuntimeException;
 
 /**
- * La configurazione del sito non è valida: il sito non parte finché non viene corretta.
+ * Un file di configurazione del sito (config/site.php o config/local.php) non è valido:
+ * il sito non parte finché non viene corretto.
  */
 final class InvalidSiteConfig extends RuntimeException {}

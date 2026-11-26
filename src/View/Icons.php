@@ -24,6 +24,12 @@ final class Icons
         'pin' => '<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"></path><circle cx="12" cy="9.5" r="2.5"></circle>',
         'clock' => '<circle cx="12" cy="12" r="9"></circle><path d="M12 12l3 2"></path><path class="fs-anim-tick" d="M12 12V7"></path>',
         'bag' => '<path d="M5 8h14l-1 13H6z"></path><path d="M9 8V6a3 3 0 0 1 6 0v2"></path>',
+        // Avvisi e moduli dell'area clienti.
+        'check' => '<path d="M5 12.5l4.5 4.5L19 7.5"></path>',
+        'alert' => '<circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v6"></path><path d="M12 16.5h.01"></path>',
+        'info' => '<circle cx="12" cy="12" r="9"></circle><path d="M12 10.5v6"></path><path d="M12 7.5h.01"></path>',
+        'mail' => '<path d="M3 5h18v14H3z"></path><path d="M3 6l9 7 9-7"></path>',
+        'exit' => '<path d="M14 4h6v16h-6"></path><path d="M10 8l-4 4 4 4"></path><path d="M6 12h10"></path>',
     ];
 
     /**

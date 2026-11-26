@@ -18,7 +18,7 @@ use FourStreet\View\Template;
 ?>
 <!doctype html>
 <html lang="it">
-<?= $view->partial('partials/document-head', ['title' => $title, 'description' => $description, 'siteUrl' => $siteUrl, 'structuredData' => $structuredData]) ?>
+<?= $view->partial('partials/document-head', ['title' => $title, 'description' => $description, 'siteUrl' => $siteUrl, 'structuredData' => $structuredData, 'noindex' => false]) ?>
 <body>
 
 <?= $content ?>

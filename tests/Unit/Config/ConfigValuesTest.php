@@ -120,6 +120,53 @@ final class ConfigValuesTest extends TestCase
         $read(ConfigValues::root($values));
     }
 
+    public function testTheSourceOpensEveryMessage(): void
+    {
+        $database = ConfigValues::root(['database' => ['port' => 0]], 'Configurazione locale (config/local.php)')->section('database');
+
+        $this->expectException(InvalidSiteConfig::class);
+        $this->expectExceptionMessage('Configurazione locale (config/local.php) non valida: "database.port" deve essere un numero intero maggiore di zero (trovato: "0").');
+
+        $database->positiveInt('port');
+    }
+
+    public function testUnknownKeysNameTheSourceToo(): void
+    {
+        $this->expectException(InvalidSiteConfig::class);
+        $this->expectExceptionMessage('Configurazione locale non valida: chiavi sconosciute (x).');
+
+        ConfigValues::root(['x' => 1], 'Configurazione locale')->assertKnownKeys([]);
+    }
+
+    public function testOptionalPositiveIntegers(): void
+    {
+        self::assertSame(30, ConfigValues::root([])->optionalPositiveInt('days', 30));
+        self::assertSame(7, ConfigValues::root(['days' => 7])->optionalPositiveInt('days', 30));
+
+        $this->expectException(InvalidSiteConfig::class);
+        ConfigValues::root(['days' => null])->optionalPositiveInt('days', 30);
+    }
+
+    public function testSecretsAreTakenAsTheyAre(): void
+    {
+        $values = ConfigValues::root(['password' => ' con spazi ', 'empty' => '']);
+
+        self::assertSame(' con spazi ', $values->optionalSecret('password'));
+        self::assertNull($values->optionalSecret('empty'));
+        self::assertNull($values->optionalSecret('missing'));
+    }
+
+    public function testASecretNeverAppearsInTheMessage(): void
+    {
+        try {
+            ConfigValues::root(['password' => "segreto\n"])->optionalSecret('password');
+            self::fail('Un segreto su due righe non è valido.');
+        } catch (InvalidSiteConfig $error) {
+            self::assertStringNotContainsString('segreto', $error->getMessage());
+            self::assertStringContainsString('(trovato: un testo di 8 caratteri)', $error->getMessage());
+        }
+    }
+
     /**
      * @return iterable<string, array{string, bool}>
      */

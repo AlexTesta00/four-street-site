@@ -3,6 +3,12 @@
 .env.*
 !.env.example
 
+# Configurazione del server (database, posta, chiave segreta): si crea da config/local.example.php
+config/local.php
+
+# Dati locali di sviluppo: database SQLite e posta in file .eml
+var/
+
 # Sistema operativo ed editor
 desktop.ini
 Thumbs.db

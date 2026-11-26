@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace FourStreet\Http\Routing;
 
 use FourStreet\Http\Controller;
+use FourStreet\Http\Middleware\Layer;
+use FourStreet\Http\Middleware\Middleware;
 use InvalidArgumentException;
 
 /**
@@ -36,6 +38,22 @@ final readonly class Route
     }
 
     /**
+     * Rotta per POST soltanto (un'azione, per esempio l'uscita dall'account).
+     */
+    public static function post(string $pattern, Controller $controller): self
+    {
+        return self::create(['POST'], $pattern, $controller);
+    }
+
+    /**
+     * Pagina con un modulo: GET (e HEAD) lo mostra, POST lo riceve.
+     */
+    public static function form(string $pattern, Controller $controller): self
+    {
+        return self::create(['GET', 'POST'], $pattern, $controller);
+    }
+
+    /**
      * @param non-empty-list<string> $methods
      */
     public static function create(array $methods, string $pattern, Controller $controller): self
@@ -53,6 +71,20 @@ final readonly class Route
         [$regex, $parameters] = self::compile($pattern);
 
         return new self($methods, $pattern, $controller, $regex, $parameters);
+    }
+
+    /**
+     * La stessa rotta con dei middleware davanti al controller. Il primo dell'elenco riceve la richiesta
+     * per primo (e la risposta per ultimo).
+     */
+    public function through(Middleware ...$middleware): self
+    {
+        $controller = $this->controller;
+        foreach (array_reverse($middleware) as $layer) {
+            $controller = new Layer($layer, $controller);
+        }
+
+        return new self($this->methods, $this->pattern, $controller, $this->regex, $this->parameters);
     }
 
     public function allows(string $method): bool

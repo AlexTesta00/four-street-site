@@ -5,26 +5,30 @@ declare(strict_types=1);
 namespace FourStreet\Config;
 
 /**
- * Lettura validata di config/site.php o di una sua sezione ("content", "booking"…).
- * Ogni errore nomina la chiave completa ("booking.capacity") e dice cosa correggere.
+ * Lettura validata di un file di configurazione (config/site.php, config/local.php) o di una sua sezione
+ * ("content", "database"…). Ogni errore nomina il file, la chiave completa ("booking.capacity")
+ * e dice cosa correggere.
  */
 final readonly class ConfigValues
 {
     /**
      * @param array<mixed> $values
      * @param string $path chiave della sezione, vuota per la radice del file
+     * @param string $source quale configurazione è: apre ogni messaggio d'errore
      */
     private function __construct(
         private array $values,
         private string $path,
+        private string $source,
     ) {}
 
     /**
      * @param array<mixed> $values
+     * @param string $source quale configurazione è, per esempio "Configurazione locale (config/local.php)"
      */
-    public static function root(array $values): self
+    public static function root(array $values, string $source = 'Configurazione del sito'): self
     {
-        return new self($values, '');
+        return new self($values, '', $source);
     }
 
     /**
@@ -37,7 +41,7 @@ final readonly class ConfigValues
             throw $this->invalid($key, 'deve essere un elenco chiave => valore', $value);
         }
 
-        return new self($value, $this->key($key));
+        return new self($value, $this->key($key), $this->source);
     }
 
     /**
@@ -64,7 +68,8 @@ final readonly class ConfigValues
         }
 
         throw new InvalidSiteConfig(sprintf(
-            'Configurazione del sito non valida: chiavi sconosciute%s (%s). Valori ammessi: %s.',
+            '%s non valida: chiavi sconosciute%s (%s). Valori ammessi: %s.',
+            $this->source,
             $this->path === '' ? '' : sprintf(' in "%s"', $this->path),
             implode(', ', $unknown),
             implode(', ', $allowed),
@@ -128,6 +133,18 @@ final readonly class ConfigValues
         return $value;
     }
 
+    /**
+     * Numero intero maggiore di zero che può mancare: se manca vale $default.
+     *
+     * @param positive-int $default
+     *
+     * @return positive-int
+     */
+    public function optionalPositiveInt(string $key, int $default): int
+    {
+        return array_key_exists($key, $this->values) ? $this->positiveInt($key) : $default;
+    }
+
     public function optionalUrl(string $key): ?string
     {
         $value = $this->values[$key] ?? '';
@@ -142,14 +159,38 @@ final readonly class ConfigValues
     }
 
     /**
-     * Errore su una chiave di questa sezione, con il percorso completo nel messaggio.
+     * Testo segreto (password, chiavi), facoltativo: si prende com'è, spazi compresi; vuoto o mancante vale null.
+     * Negli errori il valore non compare mai.
      */
-    public function invalid(string $key, string $rule, mixed $found): InvalidSiteConfig
+    public function optionalSecret(string $key): ?string
     {
-        $shown = is_string($found) ? '"' . $found . '"' : get_debug_type($found);
+        $value = $this->values[$key] ?? '';
+        if (!is_string($value)) {
+            throw $this->invalid($key, 'deve essere un testo, oppure vuoto', $value);
+        }
+        if (preg_match('/[\x00-\x1F\x7F]/', $value) === 1) {
+            throw $this->invalid($key, 'deve stare su una riga, senza caratteri di controllo', $value, hidden: true);
+        }
+
+        return $value === '' ? null : $value;
+    }
+
+    /**
+     * Errore su una chiave di questa sezione, con il percorso completo nel messaggio.
+     *
+     * @param bool $hidden il valore è un segreto: il messaggio ne dice solo la lunghezza
+     */
+    public function invalid(string $key, string $rule, mixed $found, bool $hidden = false): InvalidSiteConfig
+    {
+        $shown = match (true) {
+            is_string($found) && $hidden => sprintf('un testo di %d caratteri', mb_strlen($found)),
+            is_string($found) => '"' . $found . '"',
+            default => get_debug_type($found),
+        };
 
         return new InvalidSiteConfig(sprintf(
-            'Configurazione del sito non valida: "%s" %s (trovato: %s).',
+            '%s non valida: "%s" %s (trovato: %s).',
+            $this->source,
             $this->key($key),
             $rule,
             $shown,

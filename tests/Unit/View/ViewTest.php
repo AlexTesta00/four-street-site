@@ -145,6 +145,24 @@ final class ViewTest extends TestCase
         self::assertNull($template->takeLayout());
     }
 
+    public function testAttributesAreEscapedAndBooleanOnesStandAlone(): void
+    {
+        $template = new Template(self::view(), self::assets(), new Icons());
+
+        self::assertSame(
+            ' autocomplete="email" required maxlength="254" aria-describedby="a &quot;b&quot;"',
+            (string) $template->attributes(['autocomplete' => 'email', 'required' => true, 'checked' => false, 'aria-invalid' => null, 'maxlength' => 254, 'aria-describedby' => 'a "b"']),
+        );
+        self::assertSame('', (string) $template->attributes([]));
+    }
+
+    public function testAttributeNamesAreChecked(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        (new Template(self::view(), self::assets(), new Icons()))->attributes(['onclick="x" data-a' => 'y']);
+    }
+
     private static function view(): View
     {
         return new View(dirname(__DIR__, 2) . '/Fixtures/templates', self::assets(), new Icons());

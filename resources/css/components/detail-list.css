@@ -27,4 +27,15 @@
     grid-template-columns: 152px minmax(0, 1fr);
     gap: 16px;
   }
+  /* Valori lunghi (un'email) su schermi stretti: l'etichetta sopra il valore, in colonna da sm */
+  .fs-dl--stack > .fs-dl__row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+  @media (min-width: 640px) {
+    .fs-dl--stack > .fs-dl__row {
+      grid-template-columns: 152px minmax(0, 1fr);
+      gap: 16px;
+    }
+  }
 }

@@ -1,0 +1,145 @@
+/* ---------- Pagine dell'area clienti ----------
+   Layout compatto: su mobile una colonna stretta, con il logo in una striscia 2:1 (le lettere restano
+   intere) e il modulo subito sotto il titolo. Da lg il logo è un quadrato a sinistra e il contenuto
+   a destra, come nella pagina dei link. */
+
+@layer components {
+  .fs-auth {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+  .fs-auth__inner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+    width: 100%;
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 24px var(--gutter) 64px;
+  }
+  .fs-auth__logo {
+    aspect-ratio: 2 / 1;
+    width: 100%;
+  }
+  .fs-auth__body {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    min-width: 0;
+  }
+  .fs-auth__head {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .fs-auth__title {
+    overflow-wrap: anywhere;
+  }
+  /* "Non hai un account? Registrati": sotto il modulo, tra due filetti */
+  .fs-auth__switch {
+    padding-top: 16px;
+    border-top: 1px solid var(--color-hairline);
+    color: var(--color-fg-muted);
+    font-size: 14px;
+    line-height: 20px;
+  }
+  /* Subito dopo una nota il filetto c'è già: quello della nota */
+  .fs-auth__note + .fs-auth__switch {
+    padding-top: 0;
+    border-top: 0;
+  }
+  .fs-auth__switch a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  /* Una nota con l'icona, per esempio dove cercare l'email */
+  .fs-auth__note {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+    padding: 16px 0;
+    border-top: 1px solid var(--color-hairline);
+    border-bottom: 1px solid var(--color-hairline);
+    color: var(--color-fg-muted);
+    font-size: 16px;
+    line-height: 24px;
+  }
+  .fs-auth__note-icon {
+    width: 24px;
+    height: 24px;
+    color: var(--color-fg-subtle);
+  }
+  /* Testo e bottone della nota, uno sotto l'altro (il promemoria della pagina di accesso) */
+  .fs-auth__note-body {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    min-width: 0;
+  }
+  .fs-auth__footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 24px;
+    padding-top: 16px;
+    padding-bottom: 24px;
+    border-top: 1px solid var(--color-hairline);
+  }
+
+  /* Bottoni impilati su mobile, in fila da sm */
+  .fs-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* La pagina dell'account: sezioni con l'occhiello e il loro contenuto */
+  .fs-account__section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-top: 8px;
+  }
+  .fs-account__empty {
+    padding: 20px;
+  }
+
+  @media (min-width: 640px) {
+    .fs-actions {
+      flex-direction: row;
+      flex-wrap: wrap;
+    }
+    .fs-actions > .fs-btn--block {
+      width: auto;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .fs-auth {
+      justify-content: center;
+    }
+    .fs-auth__inner {
+      grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+      align-items: center;
+      gap: var(--gutter);
+      max-width: var(--container-container);
+      padding-top: 72px;
+      padding-bottom: 96px;
+    }
+    .fs-auth__logo {
+      aspect-ratio: 1;
+      align-self: start;
+    }
+    .fs-auth__body {
+      max-width: 480px;
+    }
+    .fs-account__empty {
+      padding: 24px;
+    }
+  }
+}

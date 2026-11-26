@@ -1,0 +1,70 @@
+/* ---------- Casella da spuntare ----------
+   Come le fasce orarie: la casella vera resta invisibile ma raggiungibile da tastiera, il quadrato che
+   la segue ne mostra lo stato (spuntata in oro, focus, errore). Il segno di spunta è disegnato con i bordi:
+   nessuna immagine. Tutta la riga è l'etichetta, alta almeno 44px. */
+
+@layer components {
+  .fs-check {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    min-height: 44px;
+    padding: 10px 0;
+    cursor: pointer;
+  }
+  .fs-check__input {
+    position: absolute;
+    top: 10px;
+    left: 0;
+    width: 24px;
+    height: 24px;
+    margin: 0;
+    opacity: 0;
+  }
+  .fs-check__box {
+    position: relative;
+    display: block;
+    flex: none;
+    width: 24px;
+    height: 24px;
+    background: var(--color-panel);
+    border: 1px solid var(--color-control);
+    transition:
+      background-color var(--duration-fast) var(--ease-out-soft),
+      border-color var(--duration-fast) var(--ease-out-soft);
+  }
+  .fs-check__box::after {
+    content: "";
+    position: absolute;
+    top: 5px;
+    left: 7px;
+    width: 8px;
+    height: 12px;
+    border-right: 2px solid var(--color-on-accent);
+    border-bottom: 2px solid var(--color-on-accent);
+    transform: rotate(45deg);
+    opacity: 0;
+  }
+  .fs-check:hover > .fs-check__input:not(:checked) + .fs-check__box {
+    border-color: var(--color-fg-muted);
+  }
+  .fs-check__input:checked + .fs-check__box {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+  .fs-check__input:checked + .fs-check__box::after {
+    opacity: 1;
+  }
+  .fs-check__input:focus-visible + .fs-check__box {
+    box-shadow: var(--focus-ring);
+  }
+  .fs-check__input[aria-invalid="true"]:not(:checked) + .fs-check__box {
+    border-color: var(--color-danger);
+  }
+  .fs-check__text {
+    color: var(--color-fg);
+    font-size: 16px;
+    line-height: 24px;
+  }
+}

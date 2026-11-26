@@ -1,0 +1,25 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+// Console dell'applicazione: php bin/console <comando> (senza comando, l'elenco).
+// Nel pacchetto di deploy sta in _app/bin/console e usa config/local.php del server.
+// Come public/index.php, è un punto d'ingresso: solo qui si leggono argomenti e ambiente del processo.
+
+use FourStreet\Config\LocalConfig;
+use FourStreet\Console\ConsoleApplication;
+use FourStreet\Console\Output;
+
+if (PHP_SAPI !== 'cli') {
+    exit(1);
+}
+
+$appRoot = dirname(__DIR__);
+require $appRoot . '/vendor/autoload.php';
+
+$localConfig = getenv(LocalConfig::FILE_VARIABLE);
+$arguments = array_values(array_filter(array_slice($argv ?? [], 1), is_string(...)));
+
+exit(ConsoleApplication::fromAppRoot($appRoot, is_string($localConfig) && $localConfig !== '' ? $localConfig : null)
+    ->run($arguments, new Output(STDOUT, STDERR)));

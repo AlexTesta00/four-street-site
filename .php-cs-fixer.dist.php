@@ -10,12 +10,13 @@ use PhpCsFixer\Runner\Parallel\ParallelConfigFactory;
 $finder = (new Finder())
     ->in([
         __DIR__ . '/config',
+        __DIR__ . '/database',
         __DIR__ . '/public',
         __DIR__ . '/src',
         __DIR__ . '/templates',
         __DIR__ . '/tests',
     ])
-    ->append([__FILE__]);
+    ->append([__FILE__, __DIR__ . '/bin/console']);
 
 return (new Config())
     ->setParallelConfig(ParallelConfigFactory::detect())

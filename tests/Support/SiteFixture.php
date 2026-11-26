@@ -75,13 +75,21 @@ final class SiteFixture
             self::templateDirectory(),
             self::PUBLIC_DIR,
             $clock,
-            new InMemoryMtimeLookup([
-                self::PUBLIC_DIR . '/assets/css/app.css' => self::CSS_MTIME,
-                self::PUBLIC_DIR . '/assets/js/app.js' => self::JS_MTIME,
-                self::PUBLIC_DIR . '/assets/img/logo.jpg' => self::LOGO_MTIME,
-            ]),
+            self::mtimes(),
             $reporter ?? new CollectingReporter(),
         );
+    }
+
+    /**
+     * Le date di modifica finte di CSS, JavaScript e logo.
+     */
+    public static function mtimes(): InMemoryMtimeLookup
+    {
+        return new InMemoryMtimeLookup([
+            self::PUBLIC_DIR . '/assets/css/app.css' => self::CSS_MTIME,
+            self::PUBLIC_DIR . '/assets/js/app.js' => self::JS_MTIME,
+            self::PUBLIC_DIR . '/assets/img/logo.jpg' => self::LOGO_MTIME,
+        ]);
     }
 
     /**

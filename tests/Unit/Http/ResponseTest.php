@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace FourStreet\Tests\Unit\Http;
 
+use FourStreet\Http\Cookie;
 use FourStreet\Http\Response;
 use FourStreet\Tests\Support\RecordingHeaderWriter;
 use FourStreet\View\Html;
@@ -15,6 +16,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(Response::class)]
 #[UsesClass(Html::class)]
+#[UsesClass(Cookie::class)]
 final class ResponseTest extends TestCase
 {
     public function testDefaults(): void
@@ -140,6 +142,27 @@ final class ResponseTest extends TestCase
             ['line' => 'Set-Cookie: a=1', 'replace' => true],
             ['line' => 'Set-Cookie: b=2', 'replace' => false],
         ], $writer->headers);
+    }
+
+    public function testSeeOtherAfterAForm(): void
+    {
+        $response = Response::seeOther('/account/');
+
+        self::assertSame(303, $response->status);
+        self::assertSame('/account/', $response->header('Location'));
+    }
+
+    public function testCookiesAreAddedWithoutReplacingTheOthers(): void
+    {
+        $response = Response::html('ok')
+            ->withCookie(new Cookie('csrf', 'a', secure: false))
+            ->withCookie(new Cookie('session', 'b', 60, secure: false));
+
+        self::assertSame(['csrf=a; Path=/; HttpOnly; SameSite=Lax', 'session=b; Max-Age=60; Path=/; HttpOnly; SameSite=Lax'], $response->headers()['Set-Cookie'] ?? null);
+        self::assertTrue($response->setsCookie('session'));
+        self::assertTrue($response->setsCookie('csrf'));
+        self::assertFalse($response->setsCookie('sess'));
+        self::assertFalse(Response::html('ok')->setsCookie('session'));
     }
 
     public function testSendAfterOutputHasStartedOnlyWritesTheBody(): void

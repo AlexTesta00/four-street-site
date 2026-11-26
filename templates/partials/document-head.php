@@ -13,6 +13,7 @@ use FourStreet\View\Template;
  * @var string $description
  * @var string|null $siteUrl
  * @var Html|null $structuredData blocco <script type="application/ld+json">, se la pagina ne ha uno
+ * @var bool $noindex pagina con moduli o dati personali: i motori di ricerca non la indicizzano
  */
 ?>
 <head>
@@ -20,6 +21,9 @@ use FourStreet\View\Template;
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= $view->e($title) ?></title>
 <meta name="description" content="<?= $view->e($description) ?>">
+<?php if ($noindex): ?>
+<meta name="robots" content="noindex">
+<?php endif; ?>
 <meta name="theme-color" content="#0b0b0a">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="it_IT">

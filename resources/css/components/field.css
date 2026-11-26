@@ -1,0 +1,136 @@
+/* ---------- Campi dei moduli ----------
+   Etichetta in maiuscoletto sopra il campo, poi l'aiuto e l'errore, poi il campo: l'errore si legge
+   prima di arrivare al campo. Il campo è alto 52px come i bottoni, con il testo a 16px
+   (su iOS un testo più piccolo farebbe ingrandire la pagina al tocco). Niente placeholder. */
+
+@layer components {
+  .fs-form {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    min-width: 0;
+  }
+  .fs-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+  .fs-field__label {
+    color: var(--color-fg-muted);
+  }
+  .fs-field__hint {
+    color: var(--color-fg-subtle);
+    font-size: 14px;
+    line-height: 20px;
+  }
+  .fs-field__error {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    color: var(--color-danger);
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 500;
+  }
+  .fs-field__error svg {
+    width: 18px;
+    height: 18px;
+    flex: none;
+    margin-top: 1px;
+  }
+  /* Link sotto un campo ("Password dimenticata?"): area da toccare di 44px */
+  .fs-field__link {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    min-height: 44px;
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  .fs-input {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    min-height: 52px;
+    padding: 0 16px;
+    margin: 0;
+    background: var(--color-panel);
+    border: 1px solid var(--color-control);
+    border-radius: 0;
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 24px;
+    appearance: none;
+    transition:
+      border-color var(--duration-fast) var(--ease-out-soft),
+      box-shadow var(--duration-fast) var(--ease-out-soft);
+  }
+  .fs-input:hover {
+    border-color: var(--color-fg-muted);
+  }
+  .fs-input:focus-visible {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: var(--focus-ring);
+  }
+  .fs-input[aria-invalid="true"] {
+    border-color: var(--color-danger);
+  }
+  /* L'autocompilazione del browser non cambia il fondo scuro: un'ombra interna lo ricopre */
+  .fs-input:-webkit-autofill {
+    -webkit-text-fill-color: var(--color-fg);
+    caret-color: var(--color-fg);
+    box-shadow: inset 0 0 0 1000px var(--color-panel);
+  }
+  .fs-input:-webkit-autofill:focus-visible {
+    box-shadow:
+      inset 0 0 0 1000px var(--color-panel),
+      var(--focus-ring);
+  }
+
+  /* Campo con un bottone dentro, a destra (password: "Mostra") */
+  .fs-input-group {
+    position: relative;
+    display: flex;
+    min-width: 0;
+  }
+  .fs-input--with-toggle {
+    padding-right: 104px;
+  }
+  .fs-input-group__toggle {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    bottom: 1px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 88px;
+    padding: 0 16px;
+    background: transparent;
+    border: 0;
+    border-left: 1px solid var(--color-hairline-strong);
+    color: var(--color-fg-muted);
+    cursor: pointer;
+    transition: color var(--duration-fast) var(--ease-out-soft);
+  }
+  .fs-input-group__toggle:hover {
+    color: var(--color-accent);
+  }
+  .fs-input-group__toggle:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+  .fs-input-group__toggle[hidden] {
+    display: none;
+  }
+
+  /* Modulo in corso d'invio (lo script mette aria-busy): il bottone si spegne un poco */
+  form[aria-busy="true"] [type="submit"] {
+    opacity: 0.72;
+    cursor: progress;
+  }
+}

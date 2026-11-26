@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace FourStreet\View;
 
 use FourStreet\Asset\AssetUrls;
+use InvalidArgumentException;
 use LogicException;
 
 /**
@@ -37,6 +38,28 @@ final class Template
     public function icon(string $name, string $class = ''): Html
     {
         return $this->icons->svg($name, $class);
+    }
+
+    /**
+     * Attributi HTML da un elenco nome => valore, ognuno preceduto da uno spazio e con l'escape.
+     * true scrive l'attributo senza valore (required), false e null lo tolgono.
+     *
+     * @param array<string, string|int|bool|null> $attributes
+     */
+    public function attributes(array $attributes): Html
+    {
+        $html = '';
+        foreach ($attributes as $name => $value) {
+            if (preg_match('/\A[a-z][a-z0-9-]*\z/', $name) !== 1) {
+                throw new InvalidArgumentException(sprintf('Nome di attributo non valido: "%s".', $name));
+            }
+            if ($value === null || $value === false) {
+                continue;
+            }
+            $html .= ' ' . $name . ($value === true ? '' : '="' . Escaper::html($value) . '"');
+        }
+
+        return new Html($html);
     }
 
     /**

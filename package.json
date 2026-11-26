@@ -15,6 +15,8 @@
     "dev:css": "tailwindcss -i resources/css/app.css -o public/assets/css/app.css --watch=always",
     "dev:js": "node scripts/build-js.mjs --watch",
     "serve": "php -S localhost:8000 -t public public/index.php",
+    "migrate": "php bin/console migrate",
+    "console": "php bin/console",
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write . --ignore-path .gitignore --ignore-path .prettierignore --ignore-path .git/info/exclude",
     "format:check": "prettier --check . --ignore-path .gitignore --ignore-path .prettierignore --ignore-path .git/info/exclude",

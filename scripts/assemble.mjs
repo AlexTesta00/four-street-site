@@ -1,8 +1,12 @@
 // Prepara build/, il pacchetto che la CI carica in public_html su Hostinger.
 //
 //   build/          copia di public/: front controller, .htaccess, asset costruiti
-//   build/_app/     src, templates, config, composer.json, composer.lock e vendor senza pacchetti dev,
-//                   con un .htaccess che nega ogni accesso dal browser
+//   build/_app/     src, templates, config, database (migrazioni), bin/console, composer.json,
+//                   composer.lock e vendor senza pacchetti dev, con un .htaccess che nega ogni
+//                   accesso dal browser
+//
+// Mai nel pacchetto: config/local.php (database, posta e chiave del server: si crea a mano sul server)
+// e var/ (database SQLite e posta di sviluppo). Se ci finissero, lo script si ferma.
 //
 // public/index.php trova da solo l'applicazione: usa _app/ se esiste, altrimenti la radice della repo.
 // Composer: comando preso da COMPOSER_BIN (predefinito "composer"), per esempio
@@ -29,9 +33,13 @@ const buildDir = join(root, 'build');
 const appDir = join(buildDir, '_app');
 
 /** Cartelle dell'applicazione copiate in _app/: dentro si tengono solo i file con queste estensioni. */
-const APP_DIRS = ['src', 'templates', 'config'];
+const APP_DIRS = ['src', 'templates', 'config', 'database'];
 const APP_EXTENSIONS = new Set(['.php']);
-const APP_FILES = ['composer.json', 'composer.lock'];
+/** File singoli copiati in _app/ così come sono (la console non ha estensione). */
+const APP_FILES = ['composer.json', 'composer.lock', 'bin/console'];
+
+/** Ciò che dipende dalla macchina e non deve mai arrivare sul server con il deploy (percorsi dalla radice). */
+const NEVER_PACKAGED = ['config/local.php', 'var'];
 
 /** File costruiti da npm run build: senza, il sito non avrebbe stili né script. */
 const BUILT_ASSETS = ['assets/css/app.css', 'assets/js/app.js'];
@@ -127,20 +135,31 @@ log('build/ pulita');
 const skippedPublic = copyTree(publicDir, buildDir, (file) => !isJunk(basename(file)));
 log('public/ copiata in build/');
 
-// 4. L'applicazione in build/_app/: solo PHP, più i file di Composer.
+// 4. L'applicazione in build/_app/: solo PHP, più i file di Composer e la console.
+//    config/local.php resta fuori: ogni server ha il suo, creato a mano.
+const neverPackaged = new Set(NEVER_PACKAGED.map((path) => join(root, path)));
 const skippedApp = [];
 for (const dir of APP_DIRS) {
   skippedApp.push(
-    ...copyTree(join(root, dir), join(appDir, dir), (file) =>
-      APP_EXTENSIONS.has(extname(file).toLowerCase()),
+    ...copyTree(
+      join(root, dir),
+      join(appDir, dir),
+      (file) => APP_EXTENSIONS.has(extname(file).toLowerCase()) && !neverPackaged.has(file),
     ),
   );
 }
 for (const name of APP_FILES) {
+  mkdirSync(dirname(join(appDir, name)), { recursive: true });
   copyFileSync(join(root, name), join(appDir, name));
 }
 writeFileSync(join(appDir, '.htaccess'), DENY_ALL_HTACCESS);
 log(`${APP_DIRS.join(', ')} e ${APP_FILES.join(', ')} copiati in build/_app/`);
+
+for (const path of NEVER_PACKAGED) {
+  if (existsSync(join(appDir, path)) || existsSync(join(buildDir, path))) {
+    fail(`${path} è finito nel pacchetto: non deve mai lasciare questa macchina.`);
+  }
+}
 
 for (const file of [...skippedPublic, ...skippedApp]) {
   log(`saltato ${display(file)}`);
