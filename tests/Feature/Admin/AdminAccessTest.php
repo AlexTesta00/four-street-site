@@ -85,6 +85,16 @@ final class AdminAccessTest extends TestCase
             $browser->post('/gestione/prenotazioni/nuova/', ['giorno' => '2026-12-07', 'fascia' => '07:00', 'nome' => 'Ospite Prova']),
             $browser->get('/gestione/prenotazioni/' . $booking->id . '/disdici/'),
             $browser->post('/gestione/prenotazioni/' . $booking->id . '/disdici/'),
+            $browser->get('/gestione/calendario/'),
+            $browser->get('/gestione/calendario/?mese=2026-12'),
+            $browser->get('/gestione/impostazioni/'),
+            $browser->post('/gestione/impostazioni/', ['prenotazioni' => 'spente', 'giorni-prenotabili' => '14', 'chiusura-prenotazioni' => '0', 'chiusura-disdette' => '0', 'prenotazioni-future' => '6']),
+            $browser->get('/gestione/orari/'),
+            $browser->post('/gestione/orari/'),
+            $browser->get('/gestione/orari/settimana/?da=2026-12-07'),
+            $browser->post('/gestione/orari/settimana/?da=2026-12-07'),
+            $browser->get('/gestione/chiusure/'),
+            $browser->post('/gestione/chiusure/'),
         ] as $response) {
             self::assertSame(404, $response->status);
             self::assertSame($missing->body, $response->body, 'La stessa pagina di un indirizzo che non esiste.');
@@ -92,6 +102,45 @@ final class AdminAccessTest extends TestCase
 
         self::assertSame(1, $this->fixture->count('bookings'), 'Nessuna prenotazione nuova.');
         self::assertSame('1', $this->fixture->seats('2026-12-07', '18:30'), 'E nessuna disdetta.');
+        self::assertSame(0, $this->fixture->count('booking_settings'), 'Né regole cambiate.');
+        self::assertSame(200, $browser->get('/prenota/')->status, 'Le prenotazioni restano accese.');
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function otherPanelPages(): iterable
+    {
+        yield 'il calendario' => ['/gestione/calendario/', '/account/accedi/?ritorno=/gestione/calendario/'];
+        yield 'un mese' => ['/gestione/calendario/?mese=2026-12', '/account/accedi/?ritorno=/gestione/calendario/%3Fmese%3D2026-12'];
+        yield 'le impostazioni' => ['/gestione/impostazioni/', '/account/accedi/?ritorno=/gestione/impostazioni/'];
+        yield 'la settimana tipo' => ['/gestione/orari/', '/account/accedi/?ritorno=/gestione/orari/'];
+        yield 'una settimana' => ['/gestione/orari/settimana/?da=2026-12-07', '/account/accedi/?ritorno=/gestione/orari/settimana/%3Fda%3D2026-12-07'];
+        yield 'le chiusure' => ['/gestione/chiusure/', '/account/accedi/?ritorno=/gestione/chiusure/'];
+    }
+
+    #[DataProvider('otherPanelPages')]
+    public function testAGuestGoesThroughTheLoginPageFromEveryPageOfThePanel(string $uri, string $login): void
+    {
+        $toLogin = $this->fixture->browser()->get($uri);
+
+        self::assertSame(303, $toLogin->status);
+        self::assertSame($login, $toLogin->header('Location'));
+        self::assertSame('no-store', $toLogin->header('Cache-Control'));
+    }
+
+    public function testAfterLoggingInTheAdminComesBackToTheCalendarAndTheSettings(): void
+    {
+        foreach ([
+            '/gestione/calendario/?mese=2026-12' => 'Dicembre 2026.</h1>',
+            '/gestione/impostazioni/' => 'Impostazioni.</h1>',
+        ] as $uri => $heading) {
+            $browser = $this->fixture->browser();
+            $browser->get($uri);
+            $loggedIn = $browser->post('/account/accedi/', ['email' => 'titolare@example.test', 'password' => AccountFixture::PASSWORD, 'ritorno' => $uri]);
+            self::assertSame($uri, $loggedIn->header('Location'));
+            self::assertStringContainsString($heading, $browser->follow($loggedIn)->body);
+        }
     }
 
     public function testThePanelPagesAreKeptOutOfCachesAndSearchEngines(): void
@@ -99,7 +148,7 @@ final class AdminAccessTest extends TestCase
         $browser = $this->fixture->browser();
         $this->fixture->logIn($browser, 'titolare@example.test');
 
-        foreach (['/gestione/', self::DAY, '/gestione/prenotazioni/nuova/?giorno=2026-12-07&fascia=07%3A00'] as $uri) {
+        foreach (['/gestione/', self::DAY, '/gestione/prenotazioni/nuova/?giorno=2026-12-07&fascia=07%3A00', '/gestione/calendario/', '/gestione/calendario/?mese=2026-12', '/gestione/impostazioni/'] as $uri) {
             $page = $browser->get($uri);
             self::assertSame(200, $page->status, $uri);
             self::assertSame('no-store', $page->header('Cache-Control'), $uri);
@@ -107,6 +156,8 @@ final class AdminAccessTest extends TestCase
             self::assertStringContainsString('<meta name="robots" content="noindex">', $page->body, $uri);
         }
         self::assertSame(200, $browser->head(self::DAY)->status);
+        self::assertSame(200, $browser->head('/gestione/calendario/')->status);
+        self::assertSame(200, $browser->head('/gestione/impostazioni/')->status);
     }
 
     public function testOnlyTheAdminsAccountPageLinksThePanel(): void

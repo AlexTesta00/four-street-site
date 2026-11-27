@@ -41,6 +41,8 @@ $view->layout('layouts/account', [
     'heading' => $day . ', ore ' . $start . '.',
     'lead' => null,
     'compact' => true,
+    // Una pagina della sezione del giorno, non la pagina del link "Oggi".
+    'nav' => $view->partial('partials/admin/nav', ['current' => 'day', 'exact' => false]),
 ]);
 ?>
 <?php if ($alert !== null): ?>

@@ -23,6 +23,8 @@ $view->layout('layouts/account', [
     'heading' => 'Niente da disdire.',
     'lead' => 'A questo indirizzo non c\'è una prenotazione da disdire: forse è già stata disdetta, oppure la sua fascia è già iniziata.',
     'compact' => true,
+    // Una pagina della sezione del giorno (il bottone porta lì), non la pagina del link "Oggi".
+    'nav' => $view->partial('partials/admin/nav', ['current' => 'day', 'exact' => false]),
 ]);
 ?>
 <a href="<?= $view->e(AdminUrls::HOME) ?>" class="fs-btn fs-btn--primary fs-btn--block">Torna alla gestione</a>

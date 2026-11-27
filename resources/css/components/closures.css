@@ -1,0 +1,76 @@
+/* ---------- Le chiusure nel pannello del titolare ----------
+   La pagina /gestione/chiusure/, pensata per il telefono: due parti una sotto l'altra, ognuna con il suo titolo in
+   maiuscoletto (fs-title-caps): il modulo "Chiudi la palestra" (i campi del sito, fs-form) e "In programma".
+   Ogni chiusura in programma è una riga panel come le prenotazioni del cliente (fs-agenda): quando, in chiaro, e sotto
+   la nota del titolare con quanti giorni; "Riapri" a destra, alto 44px. Sotto i 360px "Riapri" va sotto il testo:
+   le date restano su una riga il più possibile, e una nota lunga va a capo. */
+
+@layer components {
+  .fs-closures__section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+    scroll-margin-top: 16px;
+  }
+  /* "In programma" si stacca dal modulo con un filetto: sono due cose diverse */
+  .fs-closures__section + .fs-closures__section {
+    padding-top: 24px;
+    border-top: 1px solid var(--color-hairline);
+  }
+  .fs-closures {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .fs-closures__item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    gap: 8px 12px;
+    min-height: 72px;
+    padding: 12px;
+    background: var(--color-panel);
+    border: 1px solid var(--color-hairline-strong);
+    box-shadow: var(--edge);
+  }
+  .fs-closures__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .fs-closures__when {
+    color: var(--color-fg);
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 500;
+  }
+  /* La nota del titolare e quanti giorni: una nota lunga va a capo */
+  .fs-closures__meta {
+    color: var(--color-fg-muted);
+    font-size: 14px;
+    line-height: 20px;
+    overflow-wrap: anywhere;
+  }
+  .fs-closures__action {
+    display: flex;
+    justify-self: start;
+  }
+
+  @media (min-width: 360px) {
+    .fs-closures__item {
+      grid-template-columns: minmax(0, 1fr) auto;
+      padding: 12px 12px 12px 16px;
+    }
+    .fs-closures__action {
+      justify-self: end;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .fs-closures__item {
+      padding: 16px 16px 16px 20px;
+    }
+  }
+}

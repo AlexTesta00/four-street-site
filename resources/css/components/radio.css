@@ -1,0 +1,119 @@
+/* ---------- Scelte grandi a radio ----------
+   Un fieldset con la legenda come le etichette dei campi e una riga panel per scelta, alta almeno 64px: il cerchio,
+   il nome e una frase che dice cosa succede. La radio vera resta invisibile ma raggiungibile da tastiera, come nelle
+   fasce orarie: la riga che la segue ne mostra lo stato (scelta in oro, focus, errore), anche senza JavaScript.
+   Il punto della scelta è un bordo, non un fondo: resta visibile anche a contrasto elevato (forced colors).
+   Lo usa partials/form/radios (le impostazioni del pannello del titolare). */
+
+@layer components {
+  .fs-radios {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  /* Flottante, la legenda è un elemento come gli altri della colonna */
+  .fs-radios__legend {
+    float: left;
+    width: 100%;
+    padding: 0;
+    color: var(--color-fg-muted);
+  }
+  .fs-radios__options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .fs-radio {
+    position: relative;
+    display: block;
+    cursor: pointer;
+  }
+  .fs-radio__input {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    opacity: 0;
+  }
+  .fs-radio__row {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    align-items: start;
+    gap: 14px;
+    min-height: 64px;
+    padding: 14px 16px;
+    background: var(--color-panel);
+    border: 1px solid var(--color-hairline-strong);
+    transition:
+      background-color var(--duration-fast) var(--ease-out-soft),
+      border-color var(--duration-fast) var(--ease-out-soft),
+      transform var(--duration-press) var(--ease-out-soft);
+  }
+  .fs-radio:hover > .fs-radio__input:not(:checked) + .fs-radio__row {
+    background: var(--color-panel-hover);
+    border-color: var(--color-control);
+  }
+  .fs-radio:active > .fs-radio__input + .fs-radio__row {
+    transform: translateY(1px);
+  }
+  .fs-radio__input:checked + .fs-radio__row {
+    background: var(--color-accent-tint);
+    border-color: var(--color-accent-line);
+  }
+  .fs-radio__input:focus-visible + .fs-radio__row {
+    box-shadow: var(--focus-ring);
+  }
+  .fs-radio__input[aria-invalid="true"] + .fs-radio__row {
+    border-color: var(--color-danger);
+  }
+  .fs-radio__mark {
+    position: relative;
+    display: block;
+    width: 24px;
+    height: 24px;
+    border: 1px solid var(--color-control);
+    border-radius: 9999px;
+    transition: border-color var(--duration-fast) var(--ease-out-soft);
+  }
+  .fs-radio__mark::after {
+    content: "";
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    width: 0;
+    height: 0;
+    border: 6px solid var(--color-accent);
+    border-radius: 9999px;
+    opacity: 0;
+    transition: opacity var(--duration-fast) var(--ease-out-soft);
+  }
+  .fs-radio__input:checked + .fs-radio__row .fs-radio__mark {
+    border-color: var(--color-accent);
+  }
+  .fs-radio__input:checked + .fs-radio__row .fs-radio__mark::after {
+    opacity: 1;
+  }
+  .fs-radio__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .fs-radio__label {
+    color: var(--color-fg);
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 600;
+  }
+  .fs-radio__hint {
+    color: var(--color-fg-muted);
+    font-size: 14px;
+    line-height: 20px;
+  }
+}

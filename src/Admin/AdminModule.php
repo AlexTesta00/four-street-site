@@ -10,15 +10,25 @@ use FourStreet\Account\Http\DashboardSection;
 use FourStreet\Account\PdoUserRepository;
 use FourStreet\Admin\Http\AdminLinkSection;
 use FourStreet\Admin\Http\CancelBookingController;
+use FourStreet\Admin\Http\ClosuresController;
+use FourStreet\Admin\Http\MonthController;
 use FourStreet\Admin\Http\NewBookingController;
 use FourStreet\Admin\Http\RosterController;
+use FourStreet\Admin\Http\SettingsController;
 use FourStreet\Admin\Http\StaffBlockedPage;
+use FourStreet\Admin\Http\WeekController;
+use FourStreet\Admin\Http\WeekTemplateController;
 use FourStreet\Backend;
 use FourStreet\Booking\BookingCalendar;
 use FourStreet\Booking\BookingEmails;
 use FourStreet\Booking\BookingNotifier;
 use FourStreet\Booking\PdoBookingRepository;
+use FourStreet\Booking\Schedule\RulesEditor;
+use FourStreet\Booking\Schedule\ScheduleEditor;
+use FourStreet\Booking\Schedule\ScheduleStore;
 use FourStreet\Booking\Staff\DayRoster;
+use FourStreet\Booking\Staff\MonthOverview;
+use FourStreet\Booking\Staff\ScheduleBoard;
 use FourStreet\Booking\Staff\StaffBooking;
 use FourStreet\Booking\Staff\StaffCancellation;
 use FourStreet\Clock\Clock;
@@ -36,12 +46,13 @@ use FourStreet\Text\ItalianDateFormatter;
 use FourStreet\View\View;
 
 /**
- * Il pannello del titolare: chi è prenotato e in che fascia, e da lì una prenotazione nuova o una disdetta.
- * Niente di più: orari, regole e ruoli restano in config/site.php e nella console.
+ * Il pannello del titolare: chi è prenotato e in che fascia (un giorno, o il mese a colpo d'occhio), una prenotazione
+ * nuova o una disdetta, l'orario (la settimana tipo, una settimana precisa, le chiusure) e le regole che può cambiare.
+ * Posti per fascia e durata della fascia restano in config/site.php, i ruoli nella console.
  *
- * Il modulo porta solo HTTP (controller, modulo, avvisi, rotte): le regole stanno nei servizi di dominio delle
- * prenotazioni (Booking\Staff), senza HTTP. Ogni rotta passa da AccountGuards::admin(): niente cache, CSRF,
- * accesso obbligatorio e, per chi non è titolare, la pagina 404 di un indirizzo che non esiste.
+ * Il modulo porta solo HTTP (controller, moduli, avvisi, rotte): le regole stanno nei servizi di dominio delle
+ * prenotazioni (Booking\Staff, Booking\Schedule), senza HTTP. Ogni rotta passa da AccountGuards::admin(): niente cache,
+ * CSRF, accesso obbligatorio e, per chi non è titolare, la pagina 404 di un indirizzo che non esiste.
  * Application ne prende le rotte (create(), oppure unavailableRoutes() senza Backend) e il link al pannello
  * nella pagina dell'account (dashboardSection()).
  */
@@ -52,6 +63,11 @@ final readonly class AdminModule implements RouteProvider
         AdminUrls::HOME => ['GET'],
         AdminUrls::NEW_BOOKING => ['GET', 'POST'],
         AdminUrls::CANCEL => ['GET', 'POST'],
+        AdminUrls::CALENDAR => ['GET'],
+        AdminUrls::SCHEDULE => ['GET', 'POST'],
+        AdminUrls::WEEK => ['GET', 'POST'],
+        AdminUrls::CLOSURES => ['GET', 'POST'],
+        AdminUrls::SETTINGS => ['GET', 'POST'],
     ];
 
     /**
@@ -63,10 +79,19 @@ final readonly class AdminModule implements RouteProvider
 
     /**
      * @param AccountGuards $guards i middleware dell'area clienti: con admin() solo il titolare entra
+     * @param ScheduleStore $schedule l'orario del database, lo stesso di tutto il sito (BookingModule::schedule())
+     * @param BookingCalendar $calendar il calendario su quell'orario
      */
-    public static function create(Backend $backend, View $view, SiteConfig $site, Clock $clock, ExceptionReporter $reporter, AccountGuards $guards): self
-    {
-        $calendar = BookingCalendar::forSite($site);
+    public static function create(
+        Backend $backend,
+        View $view,
+        SiteConfig $site,
+        Clock $clock,
+        ExceptionReporter $reporter,
+        AccountGuards $guards,
+        ScheduleStore $schedule,
+        BookingCalendar $calendar,
+    ): self {
         $bookings = new PdoBookingRepository($backend->database);
         $users = new PdoUserRepository($backend->database);
         $limiter = new RateLimiter(new PdoRateLimitStore($backend->database), new Fingerprinter($backend->secret), $clock);
@@ -74,11 +99,18 @@ final readonly class AdminModule implements RouteProvider
         $notifier = new BookingNotifier(new BookingEmails(new MailTemplates($view), $backend->origin, $site, $dates, $calendar), $backend->mailer, $reporter);
         $pages = new AccountPages($view, $site, $clock, 'pages/admin');
         $blocked = new StaffBlockedPage($pages, $dates, $site->booking->capacity);
+        $editor = new ScheduleEditor($calendar, $schedule, $bookings, $users, $notifier, $limiter, $dates, $clock);
+        $board = new ScheduleBoard($calendar, $schedule, $bookings, $clock);
 
         $controllers = [
             AdminUrls::HOME => new RosterController($pages, new DayRoster($calendar, $bookings, $clock), $blocked, $dates),
             AdminUrls::NEW_BOOKING => new NewBookingController($pages, new StaffBooking($calendar, $bookings, $users, $notifier, $limiter, $clock), $blocked, $dates, $clock),
             AdminUrls::CANCEL => new CancelBookingController($pages, new StaffCancellation($bookings, $users, $notifier, $limiter, $clock), $calendar, $dates),
+            AdminUrls::CALENDAR => new MonthController($pages, new MonthOverview($calendar, $bookings, $clock), $blocked, $dates),
+            AdminUrls::SCHEDULE => new WeekTemplateController($pages, $editor, $board, $dates),
+            AdminUrls::WEEK => new WeekController($pages, $editor, $board, $blocked, $dates),
+            AdminUrls::CLOSURES => new ClosuresController($pages, $editor, $board, $calendar, $dates, $clock),
+            AdminUrls::SETTINGS => new SettingsController($pages, new RulesEditor($schedule, $limiter, $clock), $calendar, $site->booking, $dates, $clock),
         ];
 
         $routes = [];

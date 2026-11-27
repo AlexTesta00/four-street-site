@@ -11,7 +11,10 @@ use FourStreet\Admin\Http\RosterController;
 use FourStreet\Admin\Http\StaffBlockedPage;
 use FourStreet\Application;
 use FourStreet\Booking\CreatedBy;
+use FourStreet\Booking\LocalDate;
 use FourStreet\Booking\PdoBookingRepository;
+use FourStreet\Booking\Schedule\PdoSchedule;
+use FourStreet\Booking\SlotTime;
 use FourStreet\Booking\Staff\DayRoster;
 use FourStreet\Booking\Staff\RosterDay;
 use FourStreet\Booking\Staff\RosterSlot;
@@ -23,8 +26,9 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Il giorno nel pannello del titolare, attraverso l'applicazione vera: chi è prenotato in ogni fascia (posto, nome,
- * email del cliente, chi l'ha inserita), cosa si può fare e quando, il giorno senza fasce, la navigazione fra i giorni
- * e l'avviso dopo un redirect. L'orologio parte da mercoledì 25 novembre 2026, 08:00.
+ * email del cliente, chi l'ha inserita), cosa si può fare e quando, il giorno senza fasce, il giorno chiuso o con un
+ * orario suo, il link alla sua settimana dell'orario, la navigazione fra i giorni e quella del pannello, e l'avviso
+ * dopo un redirect. L'orologio parte da mercoledì 25 novembre 2026, 08:00.
  */
 #[CoversClass(Application::class)]
 #[CoversClass(AdminModule::class)]
@@ -165,10 +169,104 @@ final class AdminDayTest extends TestCase
         $before = $this->browser->get('/gestione/?giorno=2026-11-30');
         self::assertStringContainsString('Nessuna fascia: si comincia dall&#039;inaugurazione, domenica 6 dicembre.', $before->body);
 
+        // Un closed_dates del file è una chiusura: lo dice la riga dell'orario, al posto della scheda vuota.
         $fixture = new AccountFixture(site: ['booking' => SiteFixture::booking(['closed_dates' => ['2026-12-08']])]);
         $browser = $fixture->browser();
         $fixture->logIn($browser, $fixture->admin()->email->value);
-        self::assertStringContainsString('Nessuna fascia questo giorno: la palestra è chiusa.', $browser->get('/gestione/?giorno=2026-12-08')->body);
+        $closed = $browser->get('/gestione/?giorno=2026-12-08')->body;
+        self::assertStringContainsString('<span>Chiuso tutto il giorno</span>', $closed);
+        self::assertStringNotContainsString('Nessuna fascia questo giorno', $closed);
+        self::assertStringNotContainsString('fs-roster-plan', $sunday->body, 'La domenica della settimana tipo non è una chiusura.');
+    }
+
+    public function testAClosedDaySaysSoWithTheOwnersNoteEvenWithBookingsLeft(): void
+    {
+        $admin = $this->fixture->user('titolare@example.test');
+        $schedule = new PdoSchedule($this->fixture->database, $this->fixture->site->booking);
+        $schedule->saveDay(self::date('2026-12-09'), true, [], 'ferie', $admin->id, $this->fixture->clock->now());
+        $schedule->saveDay(self::date('2026-12-10'), true, [], null, $admin->id, $this->fixture->clock->now());
+        // Una prenotazione arrivata proprio mentre il titolare chiudeva il giorno: resta, fuori dall'orario.
+        $this->fixture->bookOutsideSchedule($this->fixture->customer('anna@example.test', 'Anna Bianchi'), '2026-12-09', '18:30');
+
+        $page = $this->browser->get('/gestione/?giorno=2026-12-09');
+        self::assertSame(200, $page->status);
+        // La nota è a uso interno: qui va bene, il pannello è solo del titolare.
+        self::assertStringContainsString('<p class="fs-roster-plan">', $page->body);
+        self::assertStringContainsString('<span>Chiuso: ferie</span>', $page->body);
+        $slot = self::slot($page->body, '1830');
+        self::assertStringContainsString('<span class="fs-tag">Fuori dall&#039;orario</span>', $slot);
+        self::assertStringContainsString('Anna Bianchi', $slot);
+        self::assertStringContainsString('>Disdici</span></a>', $slot);
+        self::assertSame(1, substr_count($page->body, '<section class="fs-roster'));
+        self::assertLessThan(strpos($page->body, 'fs-roster-list'), strpos($page->body, 'fs-roster-plan'));
+
+        $empty = $this->browser->get('/gestione/?giorno=2026-12-10')->body;
+        self::assertStringContainsString('<span>Chiuso tutto il giorno</span>', $empty);
+        self::assertStringNotContainsString('fs-roster-list', $empty);
+        self::assertStringNotContainsString('Nessuna fascia questo giorno', $empty);
+    }
+
+    public function testADayWithItsOwnHoursSaysSo(): void
+    {
+        $admin = $this->fixture->user('titolare@example.test');
+        (new PdoSchedule($this->fixture->database, $this->fixture->site->booking))
+            ->saveDay(self::date('2026-12-11'), false, [self::time('07:00'), self::time('18:30')], null, $admin->id, $this->fixture->clock->now());
+
+        $page = $this->browser->get('/gestione/?giorno=2026-12-11');
+
+        self::assertStringContainsString('<span>Orario cambiato per questo giorno</span>', $page->body);
+        self::assertSame(2, substr_count($page->body, '<section class="fs-roster'));
+        self::assertStringNotContainsString('fs-roster-plan', $this->browser->get('/gestione/?giorno=2026-12-12')->body, 'Il giorno dopo segue la settimana tipo.');
+    }
+
+    public function testEveryDayThatCanStillChangeLinksItsWeekOfTheSchedule(): void
+    {
+        $link = static fn(string $monday, string $day): string => '<a href="/gestione/orari/settimana/?da=' . $monday . '&amp;aperto=' . $day . '" class="fs-btn fs-btn--secondary fs-btn--block">';
+
+        // La settimana comincia lunedì: il giorno aperto è quello mostrato.
+        $wednesday = $this->browser->get('/gestione/?giorno=2026-12-09')->body;
+        self::assertStringContainsString($link('2026-12-07', '2026-12-09'), $wednesday);
+        self::assertStringContainsString('<span>Cambia l\'orario di questo giorno</span>', $wednesday);
+        self::assertStringContainsString($link('2026-12-07', '2026-12-13'), $this->browser->get('/gestione/?giorno=2026-12-13')->body, 'Anche la domenica chiusa si cambia.');
+        self::assertStringContainsString($link('2026-12-14', '2026-12-14'), $this->browser->get('/gestione/?giorno=2026-12-14')->body);
+        self::assertStringContainsString($link('2026-11-30', '2026-12-06'), $this->browser->get('/gestione/?giorno=2026-12-06')->body, 'Il giorno dell\'inaugurazione.');
+        self::assertStringContainsString($link('2027-01-04', '2027-01-04'), $this->browser->get('/gestione/?giorno=2027-01-04')->body);
+
+        // Prima dell'inaugurazione non ci sono fasce da cambiare; un giorno passato non si cambia.
+        self::assertStringNotContainsString('Cambia l\'orario', $this->browser->get('/gestione/?giorno=2026-11-30')->body);
+        $this->fixture->clock->moveTo('2026-12-09 10:00:00');
+        self::assertStringNotContainsString('Cambia l\'orario', $this->browser->get('/gestione/?giorno=2026-12-08')->body);
+        self::assertStringContainsString($link('2026-12-07', '2026-12-09'), $this->browser->get('/gestione/')->body, 'Oggi sì.');
+    }
+
+    public function testTheNavigationOfThePanelMarksTheDay(): void
+    {
+        $nav = static fn(string $current): string => '<a href="/gestione/" class="fs-adminnav__link" aria-current="' . $current . '">Oggi</a>';
+        $booking = $this->fixture->book($this->fixture->customer('anna@example.test'), '2026-12-07', '18:30');
+
+        // Prima dell'inaugurazione /gestione/ apre lunedì 7: con o senza ?giorno= è la pagina del link "Oggi".
+        $home = $this->browser->get('/gestione/');
+        self::assertStringContainsString('<nav class="fs-adminnav" aria-label="Pannello del titolare" data-panel-nav>', $home->body);
+        self::assertStringContainsString($nav('page'), $home->body);
+        self::assertLessThan(strpos($home->body, 'Gestione prenotazioni</p>'), strpos($home->body, 'fs-adminnav'), 'Sopra l\'occhiello.');
+        self::assertStringContainsString($nav('page'), $this->browser->get('/gestione/?giorno=2026-12-07')->body);
+        // Un altro giorno, anche oggi che non ha fasce, è una pagina della sezione.
+        self::assertStringContainsString($nav('true'), $this->browser->get('/gestione/?giorno=2026-12-08')->body);
+        self::assertStringContainsString($nav('true'), $this->browser->get('/gestione/?giorno=2026-11-25')->body);
+        // Le pagine che partono dal giorno, anche quelle che dicono di no.
+        foreach ([
+            '/gestione/prenotazioni/nuova/?giorno=2026-12-07&fascia=09%3A30',
+            '/gestione/prenotazioni/' . $booking->id . '/disdici/',
+            '/gestione/prenotazioni/nuova/?giorno=2026-12-13&fascia=09%3A30',
+            '/gestione/prenotazioni/999/disdici/',
+        ] as $uri) {
+            self::assertStringContainsString($nav('true'), $this->browser->get($uri)->body, $uri);
+        }
+
+        // Da lunedì 7, oggi ha le fasce: /gestione/ è oggi.
+        $this->fixture->clock->moveTo('2026-12-08 10:00:00');
+        self::assertStringContainsString($nav('page'), $this->browser->get('/gestione/?giorno=2026-12-08')->body);
+        self::assertStringContainsString($nav('true'), $this->browser->get('/gestione/?giorno=2026-12-09')->body);
     }
 
     public function testTheDayBeforeTheDayAfterTodayAndTheQuickChoice(): void
@@ -279,5 +377,15 @@ final class AdminDayTest extends TestCase
         self::assertSame(1, preg_match('#<section class="fs-roster[^"]*" aria-labelledby="fascia-' . $id . '">.*?</section>#s', $html, $match), 'Nessuna fascia ' . $id);
 
         return $match[0] ?? self::fail();
+    }
+
+    private static function date(string $value): LocalDate
+    {
+        return LocalDate::tryFrom($value) ?? self::fail('Giorno non valido: ' . $value);
+    }
+
+    private static function time(string $value): SlotTime
+    {
+        return SlotTime::tryFrom($value) ?? self::fail('Orario non valido: ' . $value);
     }
 }

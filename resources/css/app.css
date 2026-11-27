@@ -23,6 +23,8 @@
 @import "./components/seat.css";
 @import "./components/field.css";
 @import "./components/check.css";
+@import "./components/radio.css";
+@import "./components/select.css";
 @import "./components/choice.css";
 @import "./components/alert.css";
 
@@ -50,9 +52,15 @@
 @import "./components/agenda.css";
 
 /* Pannello del titolare */
+@import "./components/adminnav.css";
 @import "./components/daynav.css";
 @import "./components/daypicker.css";
 @import "./components/roster.css";
+@import "./components/month.css";
+@import "./components/hours.css";
+@import "./components/closures.css";
+@import "./components/changes.css";
+@import "./components/rules.css";
 
 @import "./motion.css";
 @import "./reduced-motion.css";

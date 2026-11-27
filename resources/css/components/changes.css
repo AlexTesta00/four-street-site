@@ -1,0 +1,116 @@
+/* ---------- Le modifiche dell'orario: conferma e avviso ----------
+   La pagina di conferma di una modifica che toglie fasce con delle prenotazioni: per ogni giorno una scheda panel con
+   la data e chi è prenotato, una persona per riga come nelle fasce del giorno (fs-roster), con l'orario in Bodoni al
+   posto del posto, il nome grande e, sotto, l'email o "Senza account" (un indirizzo lungo va a capo). Sopra, la nota
+   della chiusura, se c'è.
+   Dentro l'avviso dopo la modifica (fs-alert) gli elenchi di chi va avvisato a mano: il nome in chiaro e, sotto,
+   l'email, il giorno e l'orario. */
+
+@layer components {
+  .fs-changes {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+  }
+  .fs-changes__note {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 12px;
+    color: var(--color-fg);
+    font-size: 16px;
+    line-height: 24px;
+    overflow-wrap: anywhere;
+  }
+  .fs-changes__day {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding: 12px 12px 4px;
+    background: var(--color-panel);
+    border: 1px solid var(--color-hairline-strong);
+    box-shadow: var(--edge);
+  }
+  .fs-changes__date {
+    color: var(--color-fg);
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 600;
+  }
+  .fs-changes__people {
+    display: flex;
+    flex-direction: column;
+  }
+  .fs-changes__person {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
+    grid-template-areas:
+      "time name"
+      "time meta";
+    align-items: center;
+    column-gap: 12px;
+    row-gap: 2px;
+    min-height: 64px;
+    padding: 8px 0;
+    border-top: 1px solid var(--color-hairline);
+  }
+  .fs-changes__time {
+    grid-area: time;
+    color: var(--color-fg);
+    font-family: var(--font-display);
+    font-size: 22px;
+    line-height: 28px;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  .fs-changes__name {
+    grid-area: name;
+    min-width: 0;
+    color: var(--color-fg);
+    font-size: 18px;
+    line-height: 24px;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+  .fs-changes__meta {
+    grid-area: meta;
+    min-width: 0;
+    color: var(--color-fg-muted);
+    font-size: 14px;
+    line-height: 20px;
+    overflow-wrap: anywhere;
+  }
+
+  /* Gli elenchi dentro l'avviso: chi avvisare a mano */
+  .fs-changes__lead {
+    padding-top: 8px;
+    color: var(--color-fg);
+    font-weight: 600;
+  }
+  .fs-changes__list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .fs-changes__item {
+    display: flex;
+    flex-direction: column;
+    padding-left: 12px;
+    border-left: 1px solid var(--color-hairline-strong);
+  }
+  .fs-changes__who {
+    color: var(--color-fg);
+    font-weight: 600;
+  }
+  .fs-changes__when {
+    color: var(--color-fg-muted);
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+
+  @media (min-width: 360px) {
+    .fs-changes__day {
+      padding: 16px 16px 8px;
+    }
+  }
+}

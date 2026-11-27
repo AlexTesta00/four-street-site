@@ -7,7 +7,7 @@ namespace FourStreet\Booking\Http;
 use FourStreet\Account\Http\DashboardSection;
 use FourStreet\Account\User;
 use FourStreet\Booking\BookingAgenda;
-use FourStreet\Booking\BookingRules;
+use FourStreet\Booking\BookingCalendar;
 use FourStreet\Booking\BookingUrls;
 use FourStreet\Error\ExceptionReporter;
 use FourStreet\Http\Request;
@@ -24,10 +24,15 @@ use Throwable;
  */
 final readonly class BookingsSection implements DashboardSection
 {
+    /**
+     * @param BookingCalendar $calendar le regole in vigore: se dal sito si prenota (anche dopo il pannello del titolare)
+     * @param positive-int $capacity i posti di ogni fascia (config/site.php)
+     */
     public function __construct(
         private View $view,
         private BookingAgenda $agenda,
-        private BookingRules $rules,
+        private BookingCalendar $calendar,
+        private int $capacity,
         private ItalianDateFormatter $dates,
         private ExceptionReporter $reporter,
     ) {}
@@ -37,13 +42,14 @@ final readonly class BookingsSection implements DashboardSection
         try {
             $entries = $this->agenda->upcoming($customer);
             $alert = BookingNotice::fromRequest($request)?->alert($this->noticeSlot($request, $customer));
+            $bookUrl = $this->calendar->rules()->online ? BookingUrls::DAY : null;
         } catch (Throwable $error) {
             $this->reporter->report($error);
 
             return $this->view->render('partials/account/bookings', [...$this->common(), 'entries' => [], 'alert' => null, 'unavailable' => true, 'bookUrl' => null]);
         }
 
-        return $this->view->render('partials/account/bookings', [...$this->common(), 'entries' => $entries, 'alert' => $alert, 'unavailable' => false]);
+        return $this->view->render('partials/account/bookings', [...$this->common(), 'entries' => $entries, 'alert' => $alert, 'unavailable' => false, 'bookUrl' => $bookUrl]);
     }
 
     /**
@@ -52,8 +58,7 @@ final readonly class BookingsSection implements DashboardSection
     private function common(): array
     {
         return [
-            'capacity' => $this->rules->capacity,
-            'bookUrl' => $this->rules->online ? BookingUrls::DAY : null,
+            'capacity' => $this->capacity,
             'dates' => $this->dates,
         ];
     }

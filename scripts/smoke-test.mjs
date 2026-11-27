@@ -14,7 +14,9 @@
 //    nell'account, disdetta e la sua email. Con booking.online a false controlla "Prenotazioni presto".
 //    Infine il pannello del titolare: 404 per il cliente, admin:grant dalla console del pacchetto,
 //    una persona senza account e un cliente inseriti dal pannello, le due disdette con le loro email
-//    (solo al cliente), admin:list e admin:revoke, che chiude le sessioni.
+//    (solo al cliente), il mese, la settimana tipo, la settimana, le chiusure e le impostazioni, la chiusura
+//    di un giorno con il cliente prenotato (conferma, disdetta, email con il motivo) e la riapertura,
+//    admin:list e admin:revoke, che chiude le sessioni.
 //
 // Alla fine build/ deve essere identica a com'era: è l'artefatto che va in produzione.
 //
@@ -88,6 +90,7 @@ const REQUESTS = [
       'data-password-toggle',
       'data-submit-once',
       'data-error-summary',
+      'data-panel-nav',
     ],
   },
   { path: '/assets/img/logo.jpg', status: 200, type: 'image/jpeg' },
@@ -124,6 +127,13 @@ const REQUESTS = [
     type: 'text/html',
     body: ['Arriva presto.'],
   },
+  ...[
+    '/gestione/calendario/',
+    '/gestione/orari/',
+    '/gestione/orari/settimana/',
+    '/gestione/chiusure/',
+    '/gestione/impostazioni/',
+  ].map((path) => ({ path, status: 503, type: 'text/html', body: ['Arriva presto.'] })),
 ];
 
 /** Forma del pacchetto: cosa deve esserci e cosa non deve mai arrivare sul server. */
@@ -135,6 +145,7 @@ const REQUIRED_FILES = [
   '_app/config/local.example.php',
   '_app/database/migrations/0001_create_users.php',
   '_app/database/migrations/0005_create_bookings.php',
+  '_app/database/migrations/0006_create_schedule.php',
 ];
 const FORBIDDEN_PATHS = [
   '.env',
@@ -456,9 +467,9 @@ async function checkBookingJourney(browser, mailDir) {
   );
 }
 
-/** Il primo "Aggiungi" del pannello, dal giorno che si apre e poi con "giorno dopo": il modulo di una fascia. */
-async function findAddLink(browser) {
-  let path = '/gestione/';
+/** Il primo "Aggiungi" del pannello, dal giorno che si apre (o da quello indicato) e poi con "giorno dopo": il modulo di una fascia. */
+async function findAddLink(browser, start = '/gestione/') {
+  let path = start;
   for (let step = 0; step < 31; step += 1) {
     const page = await (await browser.get(path)).text();
     const add = page.match(
@@ -591,6 +602,8 @@ async function checkAdminJourney(browser, localConfig, mailDir) {
     `la disdetta del cliente manda l'email della palestra (${customerPage} ${customerCancelled.status})`,
   );
 
+  await checkScheduleJourney(browser, mailDir);
+
   const list = runConsole(localConfig, ['admin:list']);
   check(
     list.status === 0 && list.stdout.includes('smoke@example.com'),
@@ -606,6 +619,118 @@ async function checkAdminJourney(browser, localConfig, mailDir) {
   check(
     after.status === 303 && after.headers.get('location') === '/account/accedi/?ritorno=/gestione/',
     `admin:revoke chiude le sessioni: il pannello rimanda all'accesso (${after.status})`,
+  );
+}
+
+/**
+ * Le pagine nuove del pannello con il titolare: il mese, la settimana tipo, la settimana e le impostazioni; poi una
+ * chiusura di un giorno da domani in poi (oggi qualche fascia potrebbe essere già cominciata, e oggi non si chiude più)
+ * con il cliente prenotato: la pagina di conferma con chi c'è, la disdetta con l'email della palestra (con il motivo),
+ * la chiusura nell'elenco, e la riapertura. Alla fine il giorno è com'era.
+ */
+async function checkScheduleJourney(browser, mailDir) {
+  for (const [path, marker] of [
+    ['/gestione/calendario/', 'fs-month'],
+    ['/gestione/orari/', 'Settimana tipo.</h1>'],
+    ['/gestione/orari/settimana/', 'fs-adminnav'],
+    ['/gestione/chiusure/', 'Chiusure.</h1>'],
+    ['/gestione/impostazioni/', 'Impostazioni.</h1>'],
+  ]) {
+    const page = await browser.get(path);
+    const text = await page.text();
+    check(
+      page.status === 200 &&
+        text.includes(marker) &&
+        text.includes('data-panel-nav') &&
+        page.headers.get('cache-control') === 'no-store',
+      `il titolare apre ${path} (${page.status})`,
+    );
+  }
+
+  const today = await (await browser.get('/gestione/')).text();
+  const tomorrow = today.match(
+    /href="(\/gestione\/\?giorno=\d{4}-\d{2}-\d{2})"[^>]*fs-daynav__step--next/,
+  )?.[1];
+  const addLink = tomorrow ? await findAddLink(browser, tomorrow) : undefined;
+  const giorno = addLink?.match(/giorno=(\d{4}-\d{2}-\d{2})/)?.[1];
+  check(
+    addLink !== undefined && giorno !== undefined,
+    'il pannello ha una fascia da domani in poi',
+  );
+  if (addLink === undefined || giorno === undefined) return;
+  const time = addLink.replace(/.*fascia=(\d{2})%3A(\d{2}).*/, '$1:$2');
+  await (await browser.get(addLink)).text();
+  const booked = await browser.post('/gestione/prenotazioni/nuova/', {
+    csrf: browser.cookies.get('csrf') ?? '',
+    giorno,
+    fascia: time,
+    email: 'smoke@example.com',
+    nome: '',
+  });
+  await booked.text();
+  check(
+    booked.status === 303,
+    `il cliente è prenotato il ${giorno} alle ${time} (${booked.status})`,
+  );
+  const emailsBefore = emailFiles(mailDir).length;
+  const close = (fields) =>
+    browser.post('/gestione/chiusure/', {
+      csrf: browser.cookies.get('csrf') ?? '',
+      azione: 'chiudi',
+      da: giorno,
+      a: '',
+      nota: 'prova dello smoke test',
+      ...fields,
+    });
+
+  const confirmation = await close({});
+  const confirmationPage = await confirmation.text();
+  const fingerprint = confirmationPage.match(/name="prenotazioni" value="([\d,]+)"/)?.[1];
+  check(
+    confirmation.status === 200 &&
+      fingerprint !== undefined &&
+      confirmationPage.includes('Prova Smoke') &&
+      emailFiles(mailDir).length === emailsBefore,
+    `chiudere un giorno con un cliente prenotato chiede conferma, con il suo nome (${confirmation.status})`,
+  );
+  if (fingerprint === undefined) return;
+
+  const closed = await close({ prenotazioni: fingerprint });
+  await closed.text();
+  const location = closed.headers.get('location') ?? '';
+  const afterClose = emailFiles(mailDir);
+  const byGym = afterClose.length === emailsBefore + 1 ? readEmail(mailDir, afterClose.at(-1)) : '';
+  check(
+    closed.status === 303 &&
+      location.startsWith('/gestione/chiusure/?avviso=chiusura-salvata&disdette=1') &&
+      !location.includes('prova') &&
+      byGym.includes('Subject: Prenotazione disdetta dalla palestra') &&
+      byGym.includes('Quel giorno la palestra resta chiusa.') &&
+      !byGym.includes('prova dello smoke test'),
+    `la chiusura confermata disdice e manda l'email con il motivo, mai la nota (${closed.status} ${location})`,
+  );
+  const list = await (await browser.get(location)).text();
+  check(
+    list.includes('prova dello smoke test') && list.includes('Chiusura salvata'),
+    "l'elenco delle chiusure ha la nota del titolare, con l'avviso",
+  );
+  const day = await (await browser.get(`/prenota/?giorno=${giorno}`)).text();
+  check(
+    !day.includes(`giorno=${giorno}&amp;fascia=`),
+    'il giorno chiuso non ha fasce da prenotare',
+  );
+
+  const reopened = await browser.post('/gestione/chiusure/', {
+    csrf: browser.cookies.get('csrf') ?? '',
+    azione: 'riapri',
+    da: giorno,
+    a: giorno,
+  });
+  await reopened.text();
+  check(
+    reopened.status === 303 &&
+      reopened.headers.get('location')?.startsWith('/gestione/chiusure/?avviso=chiusura-tolta'),
+    `la riapertura torna alla settimana tipo (${reopened.status})`,
   );
 }
 
@@ -650,7 +775,7 @@ async function checkAccountJourney(temporary) {
 
   const migrate = runConsole(localConfig, ['migrate']);
   check(
-    migrate.status === 0 && migrate.stdout.includes('Database aggiornato: 5 migrazioni applicate.'),
+    migrate.status === 0 && migrate.stdout.includes('Database aggiornato: 6 migrazioni applicate.'),
     `bin/console migrate applica le migrazioni (uscita ${migrate.status})`,
   );
   if (migrate.status !== 0) console.error(migrate.stdout, migrate.stderr);

@@ -87,11 +87,11 @@ final class ConsoleApplicationTest extends TestCase
         $console = $this->console();
 
         self::assertSame(0, $console->run(['migrate:status'], $this->streams()));
-        self::assertStringEndsWith("5 migrazioni da applicare: php bin/console migrate\n", $this->written($this->stdout));
+        self::assertStringEndsWith("6 migrazioni da applicare: php bin/console migrate\n", $this->written($this->stdout));
 
         self::assertSame(0, $console->run(['migrate'], $this->streams()));
         self::assertStringEndsWith(
-            "Applicata 0001_create_users\nApplicata 0002_create_sessions\nApplicata 0003_create_account_tokens\nApplicata 0004_create_rate_limits\nApplicata 0005_create_bookings\nDatabase aggiornato: 5 migrazioni applicate.\n",
+            "Applicata 0001_create_users\nApplicata 0002_create_sessions\nApplicata 0003_create_account_tokens\nApplicata 0004_create_rate_limits\nApplicata 0005_create_bookings\nApplicata 0006_create_schedule\nDatabase aggiornato: 6 migrazioni applicate.\n",
             $this->written($this->stdout),
         );
 
@@ -99,7 +99,7 @@ final class ConsoleApplicationTest extends TestCase
         self::assertStringEndsWith("Il database è già aggiornato: nessuna migrazione da applicare.\n", $this->written($this->stdout));
 
         self::assertSame(0, $console->run(['migrate:status'], $this->streams()));
-        self::assertStringEndsWith("[x] 0005_create_bookings\nIl database è aggiornato.\n", $this->written($this->stdout));
+        self::assertStringEndsWith("[x] 0006_create_schedule\nIl database è aggiornato.\n", $this->written($this->stdout));
 
         self::assertSame(0, $console->run(['prune'], $this->streams()));
         self::assertStringEndsWith("Cancellati: 0 sessioni, 0 link delle email, 0 contatori dei tentativi.\n", $this->written($this->stdout));

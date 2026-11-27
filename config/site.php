@@ -61,10 +61,15 @@ return [
 
     // Prenotazione per fasce orarie. Le regole qui sotto sono provvisorie: vanno confermate con il titolare.
     // Orari e giorni sono ora di San Marino (timezone qui sopra).
+    // Orari (schedule), chiusure (closed_dates), days_ahead, booking_closes_minutes_before,
+    // cancel_closes_minutes_before e max_upcoming sono i valori iniziali: il titolare li cambia dal suo pannello
+    // (/gestione/), e da allora valgono quelli salvati nel database (l'orario tutto insieme, alla sua prima modifica).
+    // Restano soltanto qui i posti per fascia, la durata della fascia e le fasce di esempio.
     'booking' => [
-        // true: si prenota dal sito (serve anche config/local.php sul server, con database e posta).
-        // false: la landing mostra le fasce di esempio e /prenota/ risponde "Prenotazioni presto";
-        // chi ha già una prenotazione la vede e la può disdire dal suo account.
+        // true: si prenota dal sito (serve anche config/local.php sul server, con database e posta); il titolare
+        // le può spegnere e riaccendere dal pannello.
+        // false: la landing mostra le fasce di esempio e /prenota/ risponde "Prenotazioni presto", qualunque cosa
+        // abbia scelto il titolare; chi ha già una prenotazione la vede e la può disdire dal suo account.
         'online' => true,
         // Posti per fascia oraria: tutti i numeri della pagina partono da qui.
         'capacity' => 5,

@@ -67,26 +67,35 @@ final readonly class BookingEmails
             sprintf('Prenotazione disdetta: %s, ore %s', $this->day($booking, withYear: false), $booking->time),
             'booking-cancelled',
             $this->data($customer, $booking, [
-                // Il link per prenotare di nuovo, solo se dal sito si prenota (booking.online).
-                'bookUrl' => $this->site->booking->online ? $this->origin->url(BookingUrls::DAY) : null,
+                'bookUrl' => $this->bookUrl(),
                 'resetUrl' => $this->origin->url(AccountUrls::FORGOT_PASSWORD),
             ]),
         );
     }
 
+    /** Il link per prenotare di nuovo, solo se dal sito si prenota: booking.online, e il titolare non le ha spente. */
+    private function bookUrl(): ?string
+    {
+        return $this->calendar->rules()->online ? $this->origin->url(BookingUrls::DAY) : null;
+    }
+
     /**
      * L'avviso di una prenotazione disdetta dalla palestra: non dice "se non sei stato tu" (non l'ha fatto il cliente),
      * propone un'altra fascia se dal sito si prenota e, se c'è, il WhatsApp della palestra per chiedere.
+     * Quando la disdetta viene da un cambio d'orario dice anche perché, in una frase (mai la nota del titolare).
+     *
+     * @param string|null $reason "Quel giorno la palestra resta chiusa.", "Quel giorno la fascia delle 18:30 non c'è più."
      */
-    public function cancellationByGym(User $customer, Booking $booking): Message
+    public function cancellationByGym(User $customer, Booking $booking, ?string $reason = null): Message
     {
         return $this->templates->message(
             $customer->mailbox(),
             sprintf('Prenotazione disdetta dalla palestra: %s, ore %s', $this->day($booking, withYear: false), $booking->time),
             'booking-cancelled-by-gym',
             $this->data($customer, $booking, [
-                'bookUrl' => $this->site->booking->online ? $this->origin->url(BookingUrls::DAY) : null,
+                'bookUrl' => $this->bookUrl(),
                 'whatsappUrl' => $this->site->link('whatsapp'),
+                'reason' => $reason,
             ]),
         );
     }

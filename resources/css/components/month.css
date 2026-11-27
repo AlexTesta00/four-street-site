@@ -1,0 +1,161 @@
+/* ---------- Il mese nel pannello del titolare ----------
+   Il calendario del mese pensato per il telefono: un elenco per settimane (da lunedì a domenica), non una griglia
+   a sette colonne, che a 320px darebbe caselle di 40px, troppo strette per leggere numeri e segni e per il dito.
+   Ogni settimana ha il suo titoletto in maiuscoletto; ogni giorno è una riga-link alta almeno 56px: a sinistra
+   la data come nei calendari (fs-day__face), poi quante persone e quante fasce (o "Chiuso", con la nota del
+   titolare), sotto i segni (fs-tag): oggi in oro, le fasce piene in grigio e, più evidenti in corallo, le
+   prenotazioni fuori dall'orario, da guardare. Oggi ha il filetto oro; un giorno senza fasce non ha fondo; i giorni
+   passati si fanno da parte, testo spento, ma si aprono ancora (si guardano soltanto). */
+
+@layer components {
+  /* Il mese prima e quello dopo (fs-daynav, come fra i giorni): le due frecce a metà riga ciascuna e, sotto,
+     "Questo mese" largo quanto la riga. Tutti e tre su una riga sola non ci stanno nemmeno a 375px
+     (servono circa 430px), e le frecce resterebbero senza il mese. */
+  .fs-month__nav {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .fs-month__nav .fs-daynav__step--next {
+    grid-column: 2;
+  }
+  .fs-month__nav .fs-daynav__today {
+    grid-column: 1 / -1;
+  }
+
+  .fs-month {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    min-width: 0;
+  }
+  .fs-month__week {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .fs-month__title {
+    color: var(--color-fg-subtle);
+  }
+  .fs-month__days {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .fs-month__day {
+    position: relative;
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr) 16px;
+    align-items: center;
+    column-gap: 12px;
+    min-height: 56px;
+    padding-right: 12px;
+    background: var(--color-panel);
+    border: 1px solid var(--color-hairline-strong);
+    color: var(--color-fg);
+    text-decoration: none;
+    transition:
+      background-color var(--duration-fast) var(--ease-out-soft),
+      border-color var(--duration-fast) var(--ease-out-soft),
+      transform var(--duration-press) var(--ease-out-soft);
+  }
+  .fs-month__day:hover {
+    background: var(--color-panel-hover);
+    border-color: var(--color-control);
+  }
+  .fs-month__day:active {
+    transform: translateY(1px);
+  }
+  .fs-month__day:focus-visible {
+    /* Invisibile di solito; in Windows a contrasto elevato (forced colors) l'ombra sparisce e resta questo */
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    box-shadow: var(--focus-ring);
+  }
+  /* Senza fasce (chiuso, prima dell'inaugurazione): la riga resta, ma senza fondo */
+  .fs-month__day--off {
+    background: transparent;
+  }
+  /* Un giorno passato: si apre ancora, ma si fa da parte */
+  .fs-month__day--past {
+    background: transparent;
+    border-color: var(--color-hairline);
+    color: var(--color-fg-muted);
+  }
+  .fs-month__day[aria-current="date"] {
+    background: var(--color-accent-tint);
+    border-color: var(--color-accent-line);
+  }
+  .fs-month__day[aria-current="date"] .fs-day__number {
+    color: var(--color-accent);
+  }
+  .fs-month__date {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: stretch;
+    padding: 8px 0;
+    border-right: 1px solid var(--color-hairline);
+  }
+  .fs-month__body {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 0;
+    padding: 8px 0;
+  }
+  .fs-month__main {
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 500;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  .fs-month__day--off .fs-month__main {
+    color: var(--color-fg-muted);
+    font-weight: 400;
+  }
+  .fs-month__day--off .fs-month__meta {
+    color: var(--color-fg-subtle);
+  }
+  /* "6 fasce" oppure la nota di una chiusura: una nota lunga va a capo */
+  .fs-month__meta {
+    max-width: 100%;
+    color: var(--color-fg-muted);
+    font-size: 14px;
+    line-height: 20px;
+    overflow-wrap: anywhere;
+  }
+  .fs-month__day--past .fs-month__meta {
+    color: var(--color-fg-subtle);
+  }
+  .fs-month__marks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-top: 4px;
+  }
+  /* Prenotazioni fuori dall'orario: il segno da guardare, in corallo come gli errori */
+  .fs-month__warn {
+    border-color: var(--color-danger);
+    color: var(--color-danger);
+  }
+  .fs-month__arrow {
+    width: 16px;
+    height: 16px;
+    color: var(--color-fg-subtle);
+    transition:
+      transform var(--duration-fast) var(--ease-out-soft),
+      color var(--duration-fast) var(--ease-out-soft);
+  }
+  .fs-month__day:hover .fs-month__arrow {
+    transform: translateX(2px);
+    color: var(--color-fg);
+  }
+
+  @media (min-width: 1024px) {
+    .fs-month__day {
+      grid-template-columns: 60px minmax(0, 1fr) 16px;
+      column-gap: 16px;
+      padding-right: 16px;
+    }
+  }
+}

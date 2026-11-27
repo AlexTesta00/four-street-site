@@ -66,6 +66,27 @@ interface BookingRepository
      */
     public function roster(LocalDate $date): array;
 
+    /** Quante prenotazioni attive ha ogni fascia fra due giorni, compresi: una lettura sola, contata dal database. */
+    public function slotCounts(LocalDate $from, LocalDate $to): SlotCounts;
+
+    /**
+     * Le prenotazioni attive con le loro persone da un giorno in poi (fino a un altro, compreso, se c'è),
+     * per giorno, fascia e posto: una lettura sola. Per sapere chi tocca una modifica dell'orario.
+     *
+     * @return list<RosterEntry>
+     */
+    public function activeEntries(LocalDate $from, ?LocalDate $to = null): array;
+
+    /**
+     * Le prenotazioni con quei numeri, con le loro persone (anche disdette), per giorno, fascia e posto.
+     * Per l'avviso dopo una modifica dell'orario, che nell'indirizzo porta solo i numeri.
+     *
+     * @param list<int> $ids
+     *
+     * @return list<RosterEntry>
+     */
+    public function findEntries(array $ids): array;
+
     /**
      * Disdice una prenotazione attiva: il posto si libera, la prenotazione resta come storico.
      *

@@ -128,6 +128,61 @@ final readonly class PdoBookingRepository implements BookingRepository
         ));
     }
 
+    public function slotCounts(LocalDate $from, LocalDate $to): SlotCounts
+    {
+        $counts = [];
+        foreach ($this->database->fetchAll(
+            'SELECT slot_date, slot_time, COUNT(*) AS taken FROM bookings WHERE active = 1 AND slot_date >= :from_date AND slot_date <= :to_date'
+            . ' GROUP BY slot_date, slot_time ORDER BY slot_date, slot_time',
+            ['from_date' => $from->value, 'to_date' => $to->value],
+        ) as $row) {
+            $taken = $row->int('taken');
+            if ($taken > 0) {
+                $counts[self::date($row)->value][self::time($row)->value] = $taken;
+            }
+        }
+
+        return new SlotCounts($counts);
+    }
+
+    public function activeEntries(LocalDate $from, ?LocalDate $to = null): array
+    {
+        $parameters = ['from_date' => $from->value];
+        $until = '';
+        if ($to !== null) {
+            $until = ' AND b.slot_date <= :to_date';
+            $parameters['to_date'] = $to->value;
+        }
+
+        return array_map(self::entry(...), $this->database->fetchAll(
+            'SELECT ' . self::columns('b') . self::WITH_PERSON . ' WHERE b.active = 1 AND b.slot_date >= :from_date' . $until
+            . ' ORDER BY b.slot_date, b.slot_time, b.seat',
+            $parameters,
+        ));
+    }
+
+    public function findEntries(array $ids): array
+    {
+        $ids = array_values(array_unique($ids));
+        if ($ids === []) {
+            return [];
+        }
+
+        // Un segnaposto per numero, ognuno usato una volta.
+        $placeholders = [];
+        $parameters = [];
+        foreach ($ids as $index => $id) {
+            $placeholders[] = ':id' . $index;
+            $parameters['id' . $index] = $id;
+        }
+
+        return array_map(self::entry(...), $this->database->fetchAll(
+            'SELECT ' . self::columns('b') . self::WITH_PERSON . ' WHERE b.id IN (' . implode(', ', $placeholders) . ')'
+            . ' ORDER BY b.slot_date, b.slot_time, b.id',
+            $parameters,
+        ));
+    }
+
     public function cancel(int $id, DateTimeImmutable $at, CancelledBy $by): bool
     {
         return $this->database->execute(

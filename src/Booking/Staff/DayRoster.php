@@ -56,6 +56,7 @@ final readonly class DayRoster
             $choices,
             $this->calendar->isWithinReach($previous, $now) ? $previous : null,
             $this->calendar->isWithinReach($next, $now) ? $next : null,
+            $this->calendar->plan($date),
         );
     }
 

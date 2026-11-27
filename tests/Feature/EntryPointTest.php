@@ -50,7 +50,7 @@ final class EntryPointTest extends TestCase
 
             [$exitCode, $output] = self::runPhp([SiteFixture::rootDirectory() . '/bin/console', 'migrate'], [LocalConfig::FILE_VARIABLE => $config]);
             self::assertSame(0, $exitCode);
-            self::assertStringContainsString('Database aggiornato: 5 migrazioni applicate.', $output);
+            self::assertStringContainsString('Database aggiornato: 6 migrazioni applicate.', $output);
             self::assertFileExists($temporary->path . '/4street.sqlite');
         } finally {
             $temporary->remove();

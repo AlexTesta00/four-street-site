@@ -37,6 +37,7 @@ final class SchemaTest extends TestCase
         '0003_create_account_tokens',
         '0004_create_rate_limits',
         '0005_create_bookings',
+        '0006_create_schedule',
     ];
 
     private Database $database;
@@ -101,6 +102,20 @@ final class SchemaTest extends TestCase
         yield 'persona senza account inserita da un cliente' => ['bookings', [...$guest, 'created_by' => 'customer']];
         yield 'nome di una lettera' => ['bookings', [...$guest, 'guest_name' => 'O']];
         yield 'nome troppo lungo' => ['bookings', [...$guest, 'guest_name' => str_repeat('o', 101)]];
+
+        // L'orario e le regole del pannello del titolare (0006).
+        yield 'regola senza valore' => ['booking_settings', ['name' => 'days_ahead', 'value' => '', 'updated_by' => null, 'updated_at' => '2026-11-25 07:00:00']];
+        $weekly = ['weekday' => 1, 'slot_time' => '18:30', 'valid_from' => null, 'valid_until' => null];
+        yield 'giorno della settimana zero' => ['schedule_weekly_slots', [...$weekly, 'weekday' => 0]];
+        yield 'giorno della settimana otto' => ['schedule_weekly_slots', [...$weekly, 'weekday' => 8]];
+        yield 'orario con i secondi' => ['schedule_weekly_slots', [...$weekly, 'slot_time' => '18:30:00']];
+        yield 'validità che finisce quando comincia' => ['schedule_weekly_slots', [...$weekly, 'valid_from' => '2026-12-08', 'valid_until' => '2026-12-08']];
+        $day = ['slot_date' => '2026-12-24', 'closed' => 1, 'note' => null, 'updated_by' => null, 'updated_at' => '2026-11-25 07:00:00'];
+        yield 'chiuso vale 0 o 1' => ['schedule_days', [...$day, 'closed' => 2]];
+        yield 'nota vuota' => ['schedule_days', [...$day, 'note' => '']];
+        yield 'nota troppo lunga' => ['schedule_days', [...$day, 'note' => str_repeat('n', 101)]];
+        yield 'cambiato da un utente inesistente' => ['schedule_days', [...$day, 'updated_by' => 999_999]];
+        yield 'orario di un giorno senza eccezione' => ['schedule_day_slots', ['slot_date' => '2026-12-24', 'slot_time' => '18:30']];
     }
 
     /**
@@ -131,6 +146,25 @@ final class SchemaTest extends TestCase
         $this->insert('bookings', [...$booking, 'user_id' => null, 'guest_name' => str_repeat('o', 100), 'seat' => 3, 'created_by' => 'admin']);
 
         self::assertSame(3, $this->database->fetchOne('SELECT COUNT(*) AS total FROM bookings')?->int('total'));
+    }
+
+    public function testTheScheduleTablesAcceptWhatThePanelWrites(): void
+    {
+        $this->insert('users', ['full_name' => 'A', 'email' => 'a@example.test', 'password_hash' => 'h', 'privacy_accepted_at' => '2026-11-25 07:00:00', 'role' => 'admin', 'created_at' => '2026-11-25 07:00:00', 'updated_at' => '2026-11-25 07:00:00']);
+        $admin = $this->database->lastInsertId();
+
+        $this->insert('booking_settings', ['name' => 'schedule', 'value' => 'database', 'updated_by' => $admin, 'updated_at' => '2026-11-25 07:00:00']);
+        $this->insert('schedule_weekly_slots', ['weekday' => 7, 'slot_time' => '10:00', 'valid_from' => null, 'valid_until' => '2026-11-26']);
+        $this->insert('schedule_weekly_slots', ['weekday' => 7, 'slot_time' => '10:00', 'valid_from' => '2026-11-26', 'valid_until' => null]);
+        $this->insert('schedule_days', ['slot_date' => '2026-12-24', 'closed' => 0, 'note' => str_repeat('n', 100), 'updated_by' => $admin, 'updated_at' => '2026-11-25 07:00:00']);
+        $this->insert('schedule_day_slots', ['slot_date' => '2026-12-24', 'slot_time' => '18:30']);
+
+        // Cancellato l'account del titolare, le sue modifiche restano, senza autore; cancellato il giorno, i suoi orari.
+        $this->database->execute('DELETE FROM users WHERE id = :id', ['id' => $admin]);
+        self::assertNull($this->database->fetchOne("SELECT updated_by FROM schedule_days WHERE slot_date = '2026-12-24'")?->nullableInt('updated_by'));
+        self::assertNull($this->database->fetchOne("SELECT updated_by FROM booking_settings WHERE name = 'schedule'")?->nullableInt('updated_by'));
+        $this->database->execute("DELETE FROM schedule_days WHERE slot_date = '2026-12-24'");
+        self::assertSame(0, $this->database->fetchOne('SELECT COUNT(*) AS total FROM schedule_day_slots')?->int('total'));
     }
 
     public function testEmailsCompareExactly(): void

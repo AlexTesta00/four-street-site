@@ -13,6 +13,7 @@ use FourStreet\Admin\AdminUrls;
 use FourStreet\Asset\AssetUrls;
 use FourStreet\Asset\FilesystemMtimeLookup;
 use FourStreet\Asset\MtimeLookup;
+use FourStreet\Booking\BookingCalendar;
 use FourStreet\Booking\BookingModule;
 use FourStreet\Booking\BookingUrls;
 use FourStreet\Clock\Clock;
@@ -115,12 +116,17 @@ final readonly class Application
         // prenotazioni "presto"; home, link e calendario funzionano come sempre.
         if ($backend === null) {
             $outbox = null;
+            $calendar = null;
             $accountUnavailable = new AccountUnavailableController(new AccountPages($view, $site, $clock));
             $accountRoutes = AccountModule::unavailableRoutes($accountUnavailable);
             $bookingRoutes = BookingModule::unavailableRoutes(BookingModule::comingSoon($view, $site, $clock), $accountUnavailable);
             $adminRoutes = AdminModule::unavailableRoutes($accountUnavailable);
         } else {
             $outbox = new Outbox($backend->mailer, $reporter);
+            // L'orario e le regole del database (con config/site.php come valori iniziali): uno solo per tutti i moduli,
+            // letto una volta in questa richiesta. Il database si apre solo quando una pagina li chiede.
+            $schedule = BookingModule::schedule($backend, $site);
+            $calendar = BookingCalendar::from($schedule, $site);
             $account = AccountModule::create(
                 $backend,
                 $view,
@@ -131,13 +137,15 @@ final readonly class Application
                 new FormExpiredController($view, $site, $clock),
                 // Chi apre il pannello senza essere titolare vede la stessa pagina di un indirizzo che non esiste.
                 $notFound,
-                [AdminModule::dashboardSection($view), BookingModule::dashboardSection($backend, $view, $site, $clock, $reporter)],
+                [AdminModule::dashboardSection($view), BookingModule::dashboardSection($backend, $view, $site, $clock, $reporter, $calendar)],
                 AdminUrls::HOME,
             );
             $accountRoutes = $account->routes();
-            $bookingRoutes = BookingModule::create($backend, $view, $site, $clock, $reporter, $account->guards())->routes();
-            $adminRoutes = AdminModule::create($backend, $view, $site, $clock, $reporter, $account->guards())->routes();
+            $bookingRoutes = BookingModule::create($backend, $view, $site, $clock, $reporter, $account->guards(), $calendar)->routes();
+            $adminRoutes = AdminModule::create($backend, $view, $site, $clock, $reporter, $account->guards(), $schedule, $calendar)->routes();
         }
+        // La pagina dei link non legge mai il database: segue booking.online del file. Se il titolare spegne le
+        // prenotazioni dal pannello, il link porta alla pagina "Prenotazioni presto".
         $bookingsOnline = $backend !== null && $site->booking->online;
 
         $router = new Router([
@@ -148,7 +156,7 @@ final readonly class Application
                 $clock,
                 $dates,
                 $maps,
-                BookingModule::landingSlots($backend, $site, $clock, $reporter),
+                BookingModule::landingSlots($backend, $site, $clock, $reporter, $calendar),
                 $backend === null ? null : AccountUrls::HOME,
             )),
             Route::get('/links/', new LinksController($view, $site, $clock, $dates, $maps, $bookingsOnline ? BookingUrls::DAY : null)),

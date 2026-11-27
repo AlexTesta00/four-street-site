@@ -1,0 +1,25 @@
+/* ---------- Le impostazioni del pannello ----------
+   Il modulo delle regole delle prenotazioni (/gestione/impostazioni/), pensato per il telefono: i campi in colonna,
+   ognuno con l'aiuto che dice l'effetto con i valori in vigore. I numeri (giorni, prenotazioni) hanno il campo
+   stretto con l'unità accanto, "14 giorni": si legge come una frase, e il campo non sembra fatto per un testo.
+   Le scelte a radio e il menu a tendina sono componenti a parte (radio.css, select.css). */
+
+@layer components {
+  /* Il numero e la sua unità, sulla stessa riga */
+  .fs-rules__number {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+  .fs-rules__input {
+    flex: none;
+    width: 96px;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  .fs-rules__unit {
+    color: var(--color-fg-muted);
+    font-size: 16px;
+    line-height: 24px;
+  }
+}

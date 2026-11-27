@@ -10,6 +10,11 @@ use FourStreet\Config\ConfigValues;
  * Le regole della prenotazione (sezione "booking" di config/site.php), validate: ogni errore dice quale
  * chiave correggere. Sono tutte da confermare con il titolare, per questo stanno lì e non nel codice.
  * Una regola resta fissa: una sola prenotazione attiva per cliente al giorno (la garantisce il database).
+ *
+ * Alcune il titolare le cambia dal pannello (with()): quelle in vigore le dà Schedule\ScheduleSource::rules(),
+ * con i valori del file come iniziali. Posti per fascia e durata della fascia restano soltanto nel file.
+ * schedule, closedDates e isClosedOn() sono sempre quelli del file, anche nelle regole in vigore: l'orario vero di un
+ * giorno lo dà Schedule\ScheduleSource::day() (o BookingCalendar), che dal primo cambio del titolare legge il database.
  */
 final readonly class BookingRules
 {
@@ -28,10 +33,10 @@ final readonly class BookingRules
     ];
 
     /** Al più due mesi di fasce aperte: un numero più grande è quasi sempre un errore di battitura. */
-    private const int MAX_DAYS_AHEAD = 62;
+    public const int MAX_DAYS_AHEAD = 62;
 
     /** Prenotazione e disdetta chiudono al più una settimana prima dell'inizio. */
-    private const int MAX_MINUTES_BEFORE = 7 * 24 * 60;
+    public const int MAX_MINUTES_BEFORE = 7 * 24 * 60;
 
     /**
      * @param bool $online le prenotazioni dal sito sono attive (servono anche database e posta, config/local.php)
@@ -78,6 +83,34 @@ final readonly class BookingRules
         );
     }
 
+    /**
+     * Le stesse regole, con al posto di quelle del file le regole che il titolare ha salvato dal pannello
+     * (null: resta il valore del file). online resta spento se il file lo spegne: booking.online è l'interruttore
+     * generale di chi gestisce il sito, e con false nessuna pagina pubblica legge il database.
+     *
+     * @param positive-int|null $maxUpcoming
+     */
+    public function with(
+        ?bool $online = null,
+        ?int $daysAhead = null,
+        ?int $bookingClosesMinutesBefore = null,
+        ?int $cancelClosesMinutesBefore = null,
+        ?int $maxUpcoming = null,
+    ): self {
+        return new self(
+            online: $this->online && ($online ?? true),
+            capacity: $this->capacity,
+            schedule: $this->schedule,
+            slotMinutes: $this->slotMinutes,
+            daysAhead: $daysAhead ?? $this->daysAhead,
+            closedDates: $this->closedDates,
+            bookingClosesMinutesBefore: $bookingClosesMinutesBefore ?? $this->bookingClosesMinutesBefore,
+            cancelClosesMinutesBefore: $cancelClosesMinutesBefore ?? $this->cancelClosesMinutesBefore,
+            maxUpcoming: $maxUpcoming ?? $this->maxUpcoming,
+            examples: $this->examples,
+        );
+    }
+
     public function isClosedOn(LocalDate $day): bool
     {
         foreach ($this->closedDates as $closed) {
@@ -101,7 +134,8 @@ final readonly class BookingRules
         return self::deadline($this->bookingClosesMinutesBefore);
     }
 
-    private static function deadline(int $minutes): string
+    /** Fino a quando, a parole, con quei minuti prima dell'inizio: anche per le scelte del pannello. */
+    public static function deadline(int $minutes): string
     {
         return match (true) {
             $minutes === 0 => 'fino all\'inizio della fascia',

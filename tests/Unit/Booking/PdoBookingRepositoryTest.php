@@ -401,10 +401,57 @@ final class PdoBookingRepositoryTest extends TestCase
         self::assertNull($this->bookings->findEntry(PHP_INT_MAX));
     }
 
+    public function testTheMonthAndTheScheduleChangesReadTheBookingsInOneQuery(): void
+    {
+        $staff = $this->customer('titolare@example.test');
+        $anna = $this->customer('anna@example.test', 'Anna Bianchi');
+        $luca = $this->customer('luca@example.test', 'Luca Verdi');
+        $now = $this->clock->now();
+        $first = $this->bookings->place($anna->id, $this->slot('2026-12-07', '07:00'), 5, null, $now, CreatedBy::Customer)->booking();
+        $guest = $this->bookings->placeGuest(self::person('Marco Neri'), $this->slot('2026-12-07', '07:00'), 5, $staff->id, $now)->booking();
+        $evening = $this->bookings->place($luca->id, $this->slot('2026-12-07', '18:30'), 5, null, $now, CreatedBy::Customer)->booking();
+        $cancelled = $this->bookings->place($anna->id, $this->slot('2026-12-09', '09:30'), 5, null, $now, CreatedBy::Customer)->booking();
+        $this->bookings->cancel($cancelled->id, $now, CancelledBy::Admin);
+        $later = $this->bookings->place($luca->id, $this->slot('2027-01-04', '18:30'), 5, null, $now, CreatedBy::Admin)->booking();
+
+        // Contate dal database, per fascia, solo le attive.
+        $counts = $this->bookings->slotCounts(self::day('2026-12-01'), self::day('2026-12-31'));
+        self::assertSame(['07:00' => 2, '18:30' => 1], $counts->on(self::day('2026-12-07')));
+        self::assertSame(0, $counts->of(self::day('2026-12-09'), self::time('09:30')));
+        self::assertSame([], $counts->on(self::day('2027-01-04')), 'Fuori dal mese.');
+
+        // Le attive con le persone, da un giorno (fino a un altro), per giorno, fascia e posto.
+        $ids = self::ids(...);
+        self::assertSame([$first->id, $guest->id, $evening->id], $ids($this->bookings->activeEntries(self::day('2026-12-07'), self::day('2026-12-31'))));
+        self::assertSame([$first->id, $guest->id, $evening->id, $later->id], $ids($this->bookings->activeEntries(self::day('2026-12-01'))));
+        self::assertSame([$later->id], $ids($this->bookings->activeEntries(self::day('2026-12-08'))));
+        self::assertSame('Marco Neri', ($this->bookings->activeEntries(self::day('2026-12-07'))[1] ?? self::fail())->name);
+
+        // Per numero, anche disdette, ognuno una volta; nessun numero, nessuna lettura.
+        $found = $this->bookings->findEntries([$cancelled->id, $evening->id, $cancelled->id, PHP_INT_MAX]);
+        self::assertSame([$evening->id, $cancelled->id], $ids($found));
+        $cancelledEntry = $found[1] ?? self::fail();
+        self::assertFalse($cancelledEntry->booking->isActive());
+        self::assertSame('anna@example.test', $cancelledEntry->email?->value);
+        self::assertSame([], $this->bookings->findEntries([]));
+    }
+
     private function slot(string $date, string $time): ScheduledSlot
     {
         return $this->calendar->slot(self::day($date), self::time($time))
             ?? self::fail(sprintf('Nessuna fascia il %s alle %s.', $date, $time));
+    }
+
+    /**
+     * I numeri delle prenotazioni, nell'ordine dato.
+     *
+     * @param list<RosterEntry> $entries
+     *
+     * @return list<int>
+     */
+    private static function ids(array $entries): array
+    {
+        return array_map(static fn(RosterEntry $entry): int => $entry->booking->id, $entries);
     }
 
     private static function day(string $value): LocalDate

@@ -34,10 +34,15 @@ final readonly class BookingNotifier
         return $this->send($this->emails->cancellation($customer, $booking));
     }
 
-    /** La disdetta fatta dalla palestra, con un testo suo. */
-    public function cancelledByGym(User $customer, Booking $booking): EmailDelivery
+    /**
+     * La disdetta fatta dalla palestra, con un testo suo.
+     *
+     * @param string|null $reason perché, in una frase, quando la disdetta viene da un cambio d'orario:
+     *                            "Quel giorno la palestra resta chiusa."
+     */
+    public function cancelledByGym(User $customer, Booking $booking, ?string $reason = null): EmailDelivery
     {
-        return $this->send($this->emails->cancellationByGym($customer, $booking));
+        return $this->send($this->emails->cancellationByGym($customer, $booking, $reason));
     }
 
     private function send(Message $message): EmailDelivery

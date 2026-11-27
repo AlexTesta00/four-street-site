@@ -3,9 +3,33 @@
    presi (i quadrati e "3/5"); sotto, chi c'è, dal posto 1. Ogni persona è una riga: il posto in un quadrato,
    il nome grande e "Disdici" sulla stessa riga; sotto, largo fino al bordo, l'email o "Senza account": un
    indirizzo lungo va a capo senza schiacciare il nome. In fondo "Aggiungi", largo quanto la scheda.
-   La fascia in corso ha il filetto oro; quella finita si fa da parte, senza fondo. */
+   La fascia in corso ha il filetto oro; quella finita si fa da parte, senza fondo.
+   Sopra le schede, quando l'orario del giorno non è quello della settimana tipo, una riga lo dice (fs-roster-plan):
+   l'icona e il testo ("Chiuso: ferie"), con il filetto oro a sinistra come gli avvisi. */
 
 @layer components {
+  .fs-roster-plan {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--color-panel);
+    border: 1px solid var(--color-hairline-strong);
+    border-left: 3px solid var(--color-accent);
+    color: var(--color-fg);
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 500;
+    /* Una nota lunga va a capo invece di uscire dallo schermo */
+    overflow-wrap: anywhere;
+  }
+  .fs-roster-plan__icon {
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+    color: var(--color-accent);
+  }
   .fs-roster-list {
     display: flex;
     flex-direction: column;

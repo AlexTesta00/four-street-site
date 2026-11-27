@@ -1,0 +1,80 @@
+/* ---------- Navigazione del pannello del titolare ----------
+   In cima a ogni pagina del pannello: Oggi, Calendario, Orari, Chiusure, Impostazioni, in maiuscoletto.
+   Una riga sola. Sul telefono è larga fino ai bordi dello schermo e scorre di lato: la voce tagliata al bordo
+   dice che c'è altro (niente barra di scorrimento), e lo script porta in vista la voce corrente.
+   Voci alte 48px; la corrente in chiaro con il filetto oro sotto, le altre spente. Il focus è dentro la voce:
+   un anello fuori dalla riga verrebbe tagliato dallo scorrimento. */
+
+@layer components {
+  .fs-adminnav {
+    position: relative;
+    margin-inline: calc(var(--gutter) * -1);
+    border-bottom: 1px solid var(--color-hairline);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+  .fs-adminnav::-webkit-scrollbar {
+    display: none;
+  }
+  .fs-adminnav__list {
+    display: flex;
+    gap: 2px;
+    width: max-content;
+    min-width: 100%;
+    padding-inline: calc(var(--gutter) - 10px);
+  }
+  .fs-adminnav__link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-height: 48px;
+    padding: 0 10px;
+    color: var(--color-fg-subtle);
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-stretch: 112%;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color var(--duration-fast) var(--ease-out-soft);
+  }
+  .fs-adminnav__link:hover {
+    color: var(--color-fg);
+  }
+  .fs-adminnav__link:focus-visible {
+    outline: 2px solid transparent;
+    outline-offset: -2px;
+    box-shadow: inset 0 0 0 2px var(--color-accent);
+  }
+  .fs-adminnav__link[aria-current] {
+    color: var(--color-fg);
+  }
+  .fs-adminnav__link[aria-current]::after {
+    content: "";
+    position: absolute;
+    right: 10px;
+    bottom: -1px;
+    left: 10px;
+    height: 2px;
+    background: var(--color-accent);
+  }
+
+  /* Da lg il contenuto è una colonna accanto al logo: la riga sta dentro la colonna */
+  @media (min-width: 1024px) {
+    .fs-adminnav {
+      margin-inline: 0;
+    }
+    .fs-adminnav__list {
+      padding-inline: 0;
+    }
+    .fs-adminnav__list > li:first-child .fs-adminnav__link {
+      padding-left: 0;
+    }
+    .fs-adminnav__list > li:first-child .fs-adminnav__link[aria-current]::after {
+      left: 0;
+    }
+  }
+}

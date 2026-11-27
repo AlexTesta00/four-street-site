@@ -50,9 +50,14 @@ $time = (string) $slotTime;
         ['Scegli un altro giorno', BookingUrls::DAY],
         null,
     ],
+    // Il massimo lo sceglie il titolare dal pannello, e può abbassarlo quando un cliente ne ha già di più: la pagina
+    // dice il massimo, non quante ne ha il cliente.
     BookingStatus::TooManyUpcoming => [
-        sprintf('Hai già %d prenotazioni.', $maxUpcoming),
-        'È il massimo di prenotazioni in arrivo. Quando una è passata, o se ne disdici una, puoi prenotare di nuovo.',
+        'Hai già il massimo di prenotazioni.',
+        sprintf(
+            'Si possono avere al massimo %s in arrivo, una al giorno. Quando una è passata, o se ne disdici una, puoi prenotare di nuovo.',
+            $maxUpcoming === 1 ? 'una prenotazione' : $maxUpcoming . ' prenotazioni',
+        ),
         ['Le tue prenotazioni', AccountUrls::HOME],
         null,
     ],

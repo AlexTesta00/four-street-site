@@ -18,6 +18,7 @@ use FourStreet\Booking\BookingStatus;
 use FourStreet\Booking\CreatedBy;
 use FourStreet\Booking\LocalDate;
 use FourStreet\Booking\PdoBookingRepository;
+use FourStreet\Booking\Schedule\PdoSchedule;
 use FourStreet\Booking\ScheduledSlot;
 use FourStreet\Booking\SlotTime;
 use FourStreet\Config\SiteConfig;
@@ -194,17 +195,43 @@ final class AccountFixture
         return $result->booking();
     }
 
-    /** La fascia del calendario, che deve esistere. */
+    /** La fascia del calendario, che deve esistere: con l'orario del database, come lo vede il sito adesso. */
     public function slot(string $date, string $time): ScheduledSlot
     {
         $day = LocalDate::tryFrom($date);
         $start = SlotTime::tryFrom($time);
         Assert::assertNotNull($day);
         Assert::assertNotNull($start);
-        $slot = BookingCalendar::forSite($this->site)->slot($day, $start);
+        $slot = $this->calendar()->slot($day, $start);
         Assert::assertNotNull($slot, sprintf('Nessuna fascia il %s alle %s.', $date, $time));
 
         return $slot;
+    }
+
+    /**
+     * Una prenotazione in una fascia che l'orario non ha (più), scritta direttamente nel database: come quella di un
+     * cliente che ha prenotato proprio mentre il titolare chiudeva il giorno o toglieva la fascia.
+     */
+    public function bookOutsideSchedule(User $customer, string $date, string $time): Booking
+    {
+        $day = LocalDate::tryFrom($date);
+        $start = SlotTime::tryFrom($time);
+        Assert::assertNotNull($day);
+        Assert::assertNotNull($start);
+        $startsAt = $day->at($start, $this->site->timezone);
+        Assert::assertNotNull($startsAt);
+        $calendar = $this->calendar();
+        $slot = new ScheduledSlot($day, $start, $startsAt, $calendar->endOf($startsAt));
+        $result = (new PdoBookingRepository($this->database))->place($customer->id, $slot, $this->site->booking->capacity, null, $this->clock->now(), CreatedBy::Customer);
+        Assert::assertSame(BookingStatus::Booked, $result->status);
+
+        return $result->booking();
+    }
+
+    /** Il calendario come lo vede il sito adesso: l'orario e le regole del database, letti da capo. */
+    public function calendar(): BookingCalendar
+    {
+        return BookingCalendar::from(new PdoSchedule($this->database, $this->site->booking), $this->site);
     }
 
     /** I posti presi di una fascia, letti dal database. */

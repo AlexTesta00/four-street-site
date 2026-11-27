@@ -6,13 +6,17 @@ namespace FourStreet\Booking;
 
 use DateTimeImmutable;
 use DateTimeZone;
+use FourStreet\Booking\Schedule\DayPlan;
+use FourStreet\Booking\Schedule\FileSchedule;
+use FourStreet\Booking\Schedule\ScheduleSource;
 use FourStreet\Config\SiteConfig;
 
 /**
- * Il calendario delle fasce: quali esistono e quando si possono prenotare o disdire. Non legge il database.
+ * Il calendario delle fasce: quali esistono e quando si possono prenotare o disdire. Orario e regole li legge da
+ * una fonte sola (ScheduleSource): il database, dove li cambia il titolare, oppure config/site.php (forSite()).
  *
- * Una fascia esiste se il suo giorno della settimana ha quell'orario (booking.schedule), il giorno non è
- * di chiusura (booking.closed_dates), comincia dall'inaugurazione in poi (opening) e quel giorno l'ora
+ * Una fascia esiste se l'orario di quel giorno ha quell'orario d'inizio (la settimana tipo, oppure un orario suo,
+ * oppure nessuno se il giorno è chiuso), comincia dall'inaugurazione in poi (opening) e quel giorno l'ora
  * esiste (il passaggio all'ora legale salta le 02:00-03:00). Giorni e orari sono ora locale del sito;
  * i confronti con "adesso" si fanno sugli istanti, così il cambio dell'ora non sposta nulla.
  */
@@ -22,19 +26,45 @@ final readonly class BookingCalendar
     private const int REACH_YEARS = 10;
 
     public function __construct(
-        private BookingRules $rules,
+        private ScheduleSource $schedule,
         private DateTimeZone $timezone,
         private DateTimeImmutable $opening,
     ) {}
 
+    /** Il calendario con l'orario e le regole di config/site.php, senza database. */
     public static function forSite(SiteConfig $site): self
     {
-        return new self($site->booking, $site->timezone, $site->opening);
+        return self::from(new FileSchedule($site->booking), $site);
     }
 
+    /** Il calendario con l'orario e le regole di quella fonte (il database, quando c'è). */
+    public static function from(ScheduleSource $schedule, SiteConfig $site): self
+    {
+        return new self($schedule, $site->timezone, $site->opening);
+    }
+
+    /** Le regole in vigore: quelle del file, con i valori che il titolare ha salvato dal pannello. */
     public function rules(): BookingRules
     {
-        return $this->rules;
+        return $this->schedule->rules();
+    }
+
+    /** L'orario scritto di quel giorno e da dove viene (settimana tipo, un orario suo, chiusura): per il pannello. */
+    public function plan(LocalDate $day): DayPlan
+    {
+        return $this->schedule->day($day);
+    }
+
+    /** L'istante dell'inaugurazione: prima non ci sono fasce. */
+    public function opening(): DateTimeImmutable
+    {
+        return $this->opening;
+    }
+
+    /** L'istante in cui comincia quell'ora in quel giorno, oppure null se quel giorno l'ora non esiste (cambio dell'ora). */
+    public function startOf(LocalDate $day, SlotTime $time): ?DateTimeImmutable
+    {
+        return $day->at($time, $this->timezone);
     }
 
     public function timezone(): DateTimeZone
@@ -64,7 +94,7 @@ final readonly class BookingCalendar
     public function days(DateTimeImmutable $now): array
     {
         $today = $this->today($now);
-        $last = $today->addDays($this->rules->daysAhead);
+        $last = $today->addDays($this->rules()->daysAhead);
         $openingDay = $this->openingDay();
 
         $days = [];
@@ -80,13 +110,13 @@ final readonly class BookingCalendar
     {
         $today = $this->today($now);
 
-        return !$day->isBefore($today) && !$day->isAfter($today->addDays($this->rules->daysAhead));
+        return !$day->isBefore($today) && !$day->isAfter($today->addDays($this->rules()->daysAhead));
     }
 
     /** Il giorno viene dopo l'ultimo prenotabile: le sue fasce non sono ancora pubblicate. */
     public function isBeyondBookableDays(LocalDate $day, DateTimeImmutable $now): bool
     {
-        return $day->isAfter($this->today($now)->addDays($this->rules->daysAhead));
+        return $day->isAfter($this->today($now)->addDays($this->rules()->daysAhead));
     }
 
     /**
@@ -110,12 +140,8 @@ final readonly class BookingCalendar
      */
     public function slotsOn(LocalDate $day): array
     {
-        if ($this->rules->isClosedOn($day)) {
-            return [];
-        }
-
         $slots = [];
-        foreach ($this->rules->schedule->on($day->weekday()) as $time) {
+        foreach ($this->schedule->day($day)->times as $time) {
             $startsAt = $day->at($time, $this->timezone);
             // L'ora che il cambio dell'ora salta non esiste; prima dell'inaugurazione non si prenota.
             if ($startsAt === null || $startsAt < $this->opening) {
@@ -146,19 +172,19 @@ final readonly class BookingCalendar
     public function canBook(ScheduledSlot $slot, DateTimeImmutable $now): bool
     {
         return $this->isBookableDay($slot->date, $now)
-            && $now < self::minutesBefore($slot->startsAt, $this->rules->bookingClosesMinutesBefore);
+            && $now < self::minutesBefore($slot->startsAt, $this->rules()->bookingClosesMinutesBefore);
     }
 
     /** Una prenotazione che inizia a $startsAt si disdice ancora: manca più di cancel_closes_minutes_before. */
     public function canCancel(DateTimeImmutable $startsAt, DateTimeImmutable $now): bool
     {
-        return $now < self::minutesBefore($startsAt, $this->rules->cancelClosesMinutesBefore);
+        return $now < self::minutesBefore($startsAt, $this->rules()->cancelClosesMinutesBefore);
     }
 
     /** La fine di una fascia che inizia a $startsAt: slot_minutes di tempo reale dopo, nel fuso del sito. */
     public function endOf(DateTimeImmutable $startsAt): DateTimeImmutable
     {
-        return $this->local($startsAt->setTimestamp($startsAt->getTimestamp() + $this->rules->slotMinutes * 60));
+        return $this->local($startsAt->setTimestamp($startsAt->getTimestamp() + $this->rules()->slotMinutes * 60));
     }
 
     /** Un istante nel fuso del sito, per mostrarlo. */
@@ -174,9 +200,10 @@ final readonly class BookingCalendar
      */
     public function seating(LocalDate $day, Occupancy $occupancy, DateTimeImmutable $now): array
     {
+        $capacity = $this->rules()->capacity;
         $slots = [];
         foreach ($this->slotsOn($day) as $slot) {
-            $slots[] = new Slot($slot->time->value, $this->rules->capacity, $occupancy->seatsOf($slot->date, $slot->time), !$this->canBook($slot, $now));
+            $slots[] = new Slot($slot->time->value, $capacity, $occupancy->seatsOf($slot->date, $slot->time), !$this->canBook($slot, $now));
         }
 
         return $slots;

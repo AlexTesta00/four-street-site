@@ -8,6 +8,8 @@ use FourStreet\Account\AccountModule;
 use FourStreet\Admin\AdminModule;
 use FourStreet\Asset\AssetUrls;
 use FourStreet\Backend;
+use FourStreet\Booking\BookingCalendar;
+use FourStreet\Booking\BookingModule;
 use FourStreet\Http\Origin;
 use FourStreet\Http\Request;
 use FourStreet\Http\Routing\Route;
@@ -43,7 +45,10 @@ final class AdminModuleTest extends TestCase
         $view = new View(SiteFixture::templateDirectory(), new AssetUrls(SiteFixture::PUBLIC_DIR, SiteFixture::mtimes()), new Icons());
         $account = AccountModule::create($backend, $view, SiteFixture::config(), $fixture->clock, $fixture->reporter, new Outbox($fixture->mailer, $fixture->reporter), new StubController(), new StubController());
 
-        self::assertSame(self::expected(), self::table(AdminModule::create($backend, $view, SiteFixture::config(), $fixture->clock, $fixture->reporter, $account->guards())->routes()));
+        $schedule = BookingModule::schedule($backend, SiteFixture::config());
+        $calendar = BookingCalendar::from($schedule, SiteFixture::config());
+
+        self::assertSame(self::expected(), self::table(AdminModule::create($backend, $view, SiteFixture::config(), $fixture->clock, $fixture->reporter, $account->guards(), $schedule, $calendar)->routes()));
     }
 
     /**

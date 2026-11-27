@@ -1,0 +1,28 @@
+/* ---------- Menu a tendina ----------
+   Il campo dei moduli (fs-input) con la freccia disegnata a destra: l'aspetto del browser è spento (appearance),
+   la freccia è un'icona che non prende i tocchi. Una voce lunga finisce con i puntini, senza uscire dal campo.
+   Lo usa partials/form/select (le impostazioni del pannello del titolare). */
+
+@layer components {
+  .fs-select {
+    position: relative;
+    display: block;
+    min-width: 0;
+  }
+  .fs-select__input {
+    padding-right: 48px;
+    text-overflow: ellipsis;
+    cursor: pointer;
+  }
+  .fs-select__icon {
+    position: absolute;
+    top: 50%;
+    right: 16px;
+    width: 20px;
+    height: 20px;
+    margin-top: -10px;
+    color: var(--color-fg-muted);
+    pointer-events: none;
+    transform: rotate(90deg);
+  }
+}

@@ -56,6 +56,24 @@ final readonly class WeeklySchedule
     }
 
     /**
+     * La settimana tipo salvata dal titolare, già validata quando l'ha scritta: per ogni giorno della settimana
+     * (il numero di Weekday) gli orari d'inizio. Un giorno che manca è chiuso.
+     *
+     * @param array<int, list<SlotTime>> $days
+     */
+    public static function of(array $days): self
+    {
+        $week = [];
+        foreach (Weekday::cases() as $day) {
+            $times = $days[$day->value] ?? [];
+            usort($times, static fn(SlotTime $a, SlotTime $b): int => $a->minutes <=> $b->minutes);
+            $week[$day->value] = $times;
+        }
+
+        return new self($week);
+    }
+
+    /**
      * Gli orari d'inizio delle fasce di quel giorno della settimana, dal più presto.
      *
      * @return list<SlotTime>

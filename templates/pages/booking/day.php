@@ -48,7 +48,12 @@ $view->layout('layouts/account', [
 <div class="fs-auth__note">
   <?= $view->icon('info', 'fs-auth__note-icon') ?>
   <div class="fs-auth__note-body">
-    <p>Hai già <?= $view->e($board->upcoming) ?> prenotazioni in arrivo: è il massimo. Quando una è passata, o se ne disdici una, puoi prenotare di nuovo.</p>
+    <p><?= $view->e(match (true) {
+        // Il titolare può abbassare il massimo quando un cliente ne ha già di più: allora la pagina dice tutti e due i numeri.
+        $board->upcoming > $board->maxUpcoming => sprintf('Hai già %d prenotazioni in arrivo, e il massimo è %d. Quando ne avrai meno di %d, puoi prenotare di nuovo.', $board->upcoming, $board->maxUpcoming, $board->maxUpcoming),
+        $board->upcoming === 1 => 'Hai già una prenotazione in arrivo: è il massimo. Quando è passata, o se la disdici, puoi prenotare di nuovo.',
+        default => sprintf('Hai già %d prenotazioni in arrivo: è il massimo. Quando una è passata, o se ne disdici una, puoi prenotare di nuovo.', $board->upcoming),
+    }) ?></p>
     <a href="<?= $view->e(AccountUrls::HOME) ?>" class="fs-btn fs-btn--secondary fs-btn--sm">Le tue prenotazioni</a>
   </div>
 </div>

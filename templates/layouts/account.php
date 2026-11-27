@@ -22,6 +22,8 @@ use FourStreet\View\Template;
  * @var Html|string|null $lead la frase sotto il titolo
  * @var bool|null $compact facoltativo: su mobile niente striscia del logo, così fasce e bottone di conferma
  *                         stanno nel primo schermo (le pagine delle prenotazioni); da lg il logo resta
+ * @var Html|null $nav facoltativo: la navigazione di una sezione, sopra l'occhiello (il pannello del titolare,
+ *                     partials/admin/nav)
  */
 
 $pending = $site->content;
@@ -53,6 +55,9 @@ $logoClass = ($compact ?? false) ? 'fs-auth__logo hidden lg:block' : 'fs-auth__l
     <?= $view->partial('partials/logo', ['figureClass' => $logoClass, 'imageClass' => '', 'priority' => true]) ?>
 
     <div class="fs-auth__body">
+<?php if (($nav ?? null) !== null): ?>
+<?= $nav ?>
+<?php endif; ?>
       <div class="fs-auth__head">
         <p class="fs-label fs-anim-rise fs-step-2 text-fg-subtle"><?= $view->e($eyebrow) ?></p>
         <h1 class="fs-auth__title fs-anim-rise fs-step-3 font-display text-display-md text-balance text-fg"><?= $view->e($heading) ?></h1>

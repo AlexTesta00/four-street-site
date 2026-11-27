@@ -152,7 +152,8 @@ final class BookingOutcomesTest extends TestCase
 
         $seventh = $this->book('2026-12-14', '18:30');
         self::assertSame(409, $seventh->status);
-        self::assertStringContainsString('Hai già 6 prenotazioni.</h1>', $seventh->body);
+        self::assertStringContainsString('Hai già il massimo di prenotazioni.</h1>', $seventh->body);
+        self::assertStringContainsString('Si possono avere al massimo 6 prenotazioni in arrivo, una al giorno.', $seventh->body);
         $day = $this->browser->get('/prenota/?giorno=2026-12-14');
         self::assertStringContainsString('Hai già 6 prenotazioni in arrivo: è il massimo.', $day->body);
         self::assertStringNotContainsString('fs-slot__row--link', $day->body);

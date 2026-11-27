@@ -1,0 +1,409 @@
+/* ---------- L'orario nel pannello del titolare ----------
+   La settimana tipo (/gestione/orari/) e una settimana precisa (/gestione/orari/settimana/), pensate per il telefono
+   in palestra. Ogni giorno è una scheda come le fasce del giorno (fs-roster): il nome, poi gli orari come chip, in una
+   griglia che va a capo (due per riga già a 320px nella settimana tipo), ognuno con il suo bottone per toglierlo:
+   un quadrato di 48px con la × (il più, ruotato), al bordo destro del chip. In una settimana precisa il chip dice sotto
+   l'orario quante persone sono prenotate ("3 prenotati") e se la fascia è già cominciata: è più largo, uno per riga
+   a 320px e due da 360px. In fondo alla scheda il campo dell'ora (il selettore del telefono) con "Aggiungi" accanto,
+   sopra un filetto.
+   Nella settimana precisa ogni giorno è un details del browser (si apre anche senza JavaScript): chiuso è una riga
+   come i giorni del mese (fs-month), con la data come nei calendari (fs-day__face), quante fasce e persone, da dove
+   viene l'orario e i segni (oggi in oro, fuori orario in corallo); aperto, gli orari e le azioni del giorno, con il
+   più che diventa meno. Il giorno dove porta l'indirizzo dopo una modifica (:target) ha il filetto oro; i giorni
+   chiusi non hanno fondo, quelli passati si fanno da parte. */
+
+@layer components {
+  .fs-hours {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  /* ---------- Il giorno della settimana tipo: una scheda ---------- */
+  .fs-hours__day {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+    padding: 12px;
+    background: var(--color-panel);
+    border: 1px solid var(--color-hairline-strong);
+    box-shadow: var(--edge);
+    scroll-margin-top: 16px;
+  }
+  .fs-hours__day:target {
+    border-color: var(--color-accent-line);
+  }
+  .fs-hours__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px 16px;
+  }
+  .fs-hours__name {
+    color: var(--color-fg);
+    font-family: var(--font-display);
+    font-size: 28px;
+    line-height: 32px;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+  }
+  .fs-hours__total {
+    color: var(--color-fg-muted);
+    font-size: 14px;
+    line-height: 20px;
+  }
+  .fs-hours__status {
+    color: var(--color-fg-muted);
+    font-size: 16px;
+    line-height: 24px;
+    overflow-wrap: anywhere;
+  }
+  /* L'avviso dopo una modifica e quello delle prenotazioni fuori orario stanno dentro il giorno: lì non hanno un fondo
+     loro, perché un panel non va dentro un panel. Resta il filetto colorato. */
+  .fs-hours__day > .fs-alert,
+  .fs-hours__body > .fs-alert {
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* ---------- Gli orari come chip ---------- */
+  /* Colonne larghe almeno quanto un chip: due per riga nella settimana tipo anche a 320px */
+  .fs-hours__times {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 7.25rem), 1fr));
+    gap: 8px;
+  }
+  /* Con le persone prenotate sotto l'orario ("3 prenotati") il chip è più largo: a 320px uno per riga, da 360px due */
+  .fs-hours__times--booked {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 8.5rem), 1fr));
+  }
+  /* Alto 50px: dentro il filetto il bottone che toglie l'orario resta di 48 */
+  .fs-hours__chip {
+    display: flex;
+    align-items: stretch;
+    min-width: 0;
+    min-height: 50px;
+    border: 1px solid var(--color-control);
+  }
+  /* L'orario e, sotto, lo stato e le persone, una riga ciascuno: così due chip stanno su una riga già a 360px */
+  .fs-hours__chip-text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+    padding: 4px 6px 4px 10px;
+  }
+  .fs-hours__time {
+    color: var(--color-fg);
+    font-family: var(--font-display);
+    font-size: 22px;
+    line-height: 28px;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  /* "3 prenotati", "Cominciata" */
+  .fs-hours__detail {
+    color: var(--color-fg-muted);
+    font-size: 13px;
+    line-height: 16px;
+    font-weight: 500;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  .fs-hours__chip--started {
+    border-color: var(--color-hairline-strong);
+  }
+  .fs-hours__chip--started .fs-hours__time,
+  .fs-hours__chip--started .fs-hours__detail {
+    color: var(--color-fg-subtle);
+  }
+  /* La fascia quel giorno non c'è: filetto tratteggiato, testo spento */
+  .fs-hours__chip--missing {
+    border-style: dashed;
+  }
+  .fs-hours__chip--missing .fs-hours__time,
+  .fs-hours__chip--missing .fs-hours__detail {
+    color: var(--color-fg-subtle);
+  }
+  .fs-hours__chip-form {
+    display: flex;
+    flex: none;
+  }
+  /* Il bottone che toglie l'orario: un quadrato di 48px, con il filetto che lo separa dall'ora */
+  .fs-hours__remove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    min-height: 48px;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-left: 1px solid var(--color-hairline-strong);
+    color: var(--color-fg-muted);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-fast) var(--ease-out-soft),
+      color var(--duration-fast) var(--ease-out-soft);
+  }
+  .fs-hours__remove:hover {
+    background: var(--color-panel-hover);
+    color: var(--color-danger);
+  }
+  .fs-hours__remove:active .fs-hours__x {
+    transform: rotate(45deg) scale(0.9);
+  }
+  .fs-hours__x {
+    width: 20px;
+    height: 20px;
+    transform: rotate(45deg);
+    transition: transform var(--duration-press) var(--ease-out-soft);
+  }
+
+  /* ---------- Aggiungi un orario ---------- */
+  .fs-hours__add {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 16px;
+    border-top: 1px solid var(--color-hairline);
+  }
+  .fs-hours__add-row {
+    display: flex;
+    gap: 8px;
+    min-width: 0;
+  }
+  /* Il campo prende la riga che resta accanto al bottone, anche se è stretta */
+  .fs-hours__input {
+    flex: 1 1 0;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  .fs-hours__add-button {
+    flex: none;
+    gap: 8px;
+    padding: 0 16px;
+  }
+
+  /* ---------- Una settimana precisa: un details per giorno ---------- */
+  /* La settimana prima e quella dopo (fs-daynav, come fra i giorni e fra i mesi): le due frecce a metà riga e,
+     sotto, "Questa settimana" largo quanto la riga, che fra le frecce non ci sta sul telefono. */
+  .fs-hours__nav {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .fs-hours__nav .fs-daynav__step--next {
+    grid-column: 2;
+  }
+  .fs-hours__nav .fs-daynav__today {
+    grid-column: 1 / -1;
+  }
+
+  .fs-hours--week {
+    gap: 8px;
+  }
+  .fs-hours__fold {
+    min-width: 0;
+    background: var(--color-panel);
+    border: 1px solid var(--color-hairline-strong);
+    box-shadow: var(--edge);
+    scroll-margin-top: 16px;
+  }
+  .fs-hours__fold[open] {
+    border-color: var(--color-control);
+  }
+  /* Senza fasce (chiuso, prima dell'inaugurazione, la domenica della settimana tipo): la riga resta, senza fondo */
+  .fs-hours__fold--off {
+    background: transparent;
+    box-shadow: none;
+  }
+  .fs-hours__fold--off .fs-hours__main {
+    color: var(--color-fg-muted);
+    font-weight: 400;
+  }
+  /* Un giorno passato: si apre ancora, ma si fa da parte */
+  .fs-hours__fold--past {
+    background: transparent;
+    border-color: var(--color-hairline);
+    box-shadow: none;
+  }
+  .fs-hours__fold--past .fs-hours__main {
+    color: var(--color-fg-muted);
+  }
+  .fs-hours__fold--today .fs-day__number {
+    color: var(--color-accent);
+  }
+  /* Il giorno dove porta l'indirizzo dopo una modifica */
+  .fs-hours__fold:target {
+    border-color: var(--color-accent-line);
+  }
+  .fs-hours__summary {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr) 20px;
+    align-items: center;
+    column-gap: 12px;
+    min-height: 64px;
+    padding-right: 12px;
+    color: var(--color-fg);
+    list-style: none;
+    cursor: pointer;
+    transition: background-color var(--duration-fast) var(--ease-out-soft);
+  }
+  .fs-hours__summary::-webkit-details-marker {
+    display: none;
+  }
+  .fs-hours__summary:hover {
+    background: var(--color-panel-hover);
+  }
+  .fs-hours__date {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: stretch;
+    padding: 8px 0;
+    border-right: 1px solid var(--color-hairline);
+  }
+  .fs-hours__about {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 0;
+    padding: 10px 0;
+  }
+  .fs-hours__main {
+    max-width: 100%;
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 500;
+    font-variant-numeric: lining-nums tabular-nums;
+    overflow-wrap: anywhere;
+  }
+  .fs-hours__meta {
+    color: var(--color-fg-muted);
+    font-size: 14px;
+    line-height: 20px;
+  }
+  .fs-hours__marks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-top: 4px;
+  }
+  /* Prenotazioni fuori dall'orario: il segno da guardare, in corallo come gli errori (come nel mese) */
+  .fs-hours__warn {
+    border-color: var(--color-danger);
+    color: var(--color-danger);
+  }
+  /* Il più diventa meno quando il giorno è aperto, come nella scelta rapida dei giorni */
+  .fs-hours__toggle {
+    width: 20px;
+    height: 20px;
+    color: var(--color-fg-muted);
+  }
+  .fs-hours__toggle > path:last-child {
+    transition: opacity var(--duration-fast) var(--ease-out-soft);
+  }
+  .fs-hours__fold[open] .fs-hours__toggle > path:last-child {
+    opacity: 0;
+  }
+  .fs-hours__body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+    padding: 16px 12px;
+    border-top: 1px solid var(--color-hairline);
+  }
+
+  /* Le azioni del giorno: chiudere, riaprire, tornare alla settimana tipo, sopra un filetto */
+  .fs-hours__actions {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--color-hairline);
+  }
+  .fs-hours__action {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  /* "Chi è prenotato": una riga alta 48px che porta al giorno del pannello */
+  .fs-hours__link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 48px;
+    margin-bottom: -8px;
+    border-top: 1px solid var(--color-hairline);
+    color: var(--color-fg);
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: color var(--duration-fast) var(--ease-out-soft);
+  }
+  .fs-hours__link svg {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    color: var(--color-fg-subtle);
+    transition:
+      transform var(--duration-fast) var(--ease-out-soft),
+      color var(--duration-fast) var(--ease-out-soft);
+  }
+  .fs-hours__link:hover {
+    color: var(--color-accent);
+  }
+  .fs-hours__link:hover svg {
+    transform: translateX(2px);
+    color: currentColor;
+  }
+
+  /* La copia nella settimana dopo, in fondo */
+  .fs-hours__copy {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-top: 8px;
+  }
+  .fs-hours__note {
+    color: var(--color-fg-muted);
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  @media (min-width: 360px) {
+    .fs-hours__day {
+      padding: 16px;
+    }
+    .fs-hours__body {
+      padding: 16px;
+    }
+    .fs-hours__chip-text {
+      padding-left: 12px;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .fs-hours__day {
+      padding: 20px;
+    }
+    .fs-hours__name {
+      font-size: 32px;
+      line-height: 36px;
+    }
+    .fs-hours__summary {
+      grid-template-columns: 60px minmax(0, 1fr) 20px;
+      column-gap: 16px;
+      padding-right: 16px;
+    }
+    .fs-hours__body {
+      padding: 20px;
+    }
+  }
+}
