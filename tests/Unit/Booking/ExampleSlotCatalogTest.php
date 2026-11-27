@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace FourStreet\Tests\Unit\Booking;
 
 use FourStreet\Booking\ExampleSlotCatalog;
+use FourStreet\Booking\FirstFreeSeat;
 use FourStreet\Booking\Slot;
 use FourStreet\Booking\SlotCatalog;
+use FourStreet\Booking\SlotTime;
 use FourStreet\Config\ConfigValues;
 use FourStreet\Config\InvalidSiteConfig;
 use InvalidArgumentException;
@@ -17,24 +19,26 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ExampleSlotCatalog::class)]
 #[UsesClass(Slot::class)]
+#[UsesClass(SlotTime::class)]
+#[UsesClass(FirstFreeSeat::class)]
 #[UsesClass(ConfigValues::class)]
 #[UsesClass(InvalidSiteConfig::class)]
 final class ExampleSlotCatalogTest extends TestCase
 {
-    private const array BOOKING = [
-        'capacity' => 5,
+    private const array EXAMPLES = [
         'example_slots' => ['07:00' => 2, '09:30' => 4, '12:30' => 1, '17:30' => 5, '18:30' => 3, '20:00' => 0],
         'default_slot' => '18:30',
     ];
 
     public function testServesTheExampleSlotsInTheirOrder(): void
     {
-        $catalog = self::catalog(ExampleSlotCatalog::fromConfig(ConfigValues::root(self::BOOKING)));
+        $catalog = self::catalog(ExampleSlotCatalog::fromConfig(ConfigValues::root(self::EXAMPLES), 5));
 
         $taken = [];
         foreach ($catalog->slots() as $slot) {
             $taken[$slot->time] = $slot->taken;
             self::assertSame(5, $slot->capacity);
+            self::assertFalse($slot->closed, 'Una fascia di esempio non è mai chiusa.');
         }
         self::assertSame(5, $catalog->capacity());
         self::assertSame(['07:00' => 2, '09:30' => 4, '12:30' => 1, '17:30' => 5, '18:30' => 3, '20:00' => 0], $taken);
@@ -42,20 +46,19 @@ final class ExampleSlotCatalogTest extends TestCase
 
     public function testTheDefaultSlot(): void
     {
-        $default = ExampleSlotCatalog::fromConfig(ConfigValues::root(self::BOOKING))->defaultSlot();
+        $default = ExampleSlotCatalog::fromConfig(ConfigValues::root(self::EXAMPLES), 5)->defaultSlot();
 
         self::assertSame('18:30', $default->time);
         self::assertSame(4, $default->nextSeat());
+        // Gli esempi prendono i primi posti: il prossimo è quello dopo.
+        self::assertSame([1, 2, 3], $default->takenSeats);
     }
 
     /**
      * @return iterable<string, array{array<string, mixed>, string}>
      */
-    public static function invalidBookings(): iterable
+    public static function invalidExamples(): iterable
     {
-        yield 'chiave sconosciuta' => [['slots' => []], 'chiavi sconosciute (slots)'];
-        yield 'capienza zero' => [['capacity' => 0], '"capacity" deve essere un numero intero maggiore di zero (trovato: "0")'];
-        yield 'capienza come testo' => [['capacity' => '5'], '"capacity" deve essere un numero intero maggiore di zero'];
         yield 'nessuna fascia' => [['example_slots' => []], '"example_slots" deve essere un elenco orario => posti occupati, con almeno una fascia'];
         yield 'fasce non elenco' => [['example_slots' => '18:30'], '"example_slots" deve essere un elenco'];
         yield 'orario senza zero' => [['example_slots' => ['7:00' => 1]], '"example_slots" deve avere orari a 24 ore nel formato HH:MM, come "18:30" (trovato: "7:00")'];
@@ -71,13 +74,13 @@ final class ExampleSlotCatalogTest extends TestCase
     /**
      * @param array<string, mixed> $overrides
      */
-    #[DataProvider('invalidBookings')]
-    public function testInvalidBookingsStopTheSite(array $overrides, string $message): void
+    #[DataProvider('invalidExamples')]
+    public function testInvalidExamplesStopTheSite(array $overrides, string $message): void
     {
         $this->expectException(InvalidSiteConfig::class);
         $this->expectExceptionMessage($message);
 
-        ExampleSlotCatalog::fromConfig(ConfigValues::root([...self::BOOKING, ...$overrides]));
+        ExampleSlotCatalog::fromConfig(ConfigValues::root([...self::EXAMPLES, ...$overrides]), 5);
     }
 
     /**
@@ -85,9 +88,9 @@ final class ExampleSlotCatalogTest extends TestCase
      */
     public static function brokenInvariants(): iterable
     {
-        yield 'capienza diversa' => [[new Slot('18:30', 4, 1)], '18:30', 'La fascia delle 18:30 non ha 5 posti.'];
-        yield 'fascia scelta inesistente' => [[new Slot('18:30', 5, 1)], '19:00', 'La fascia scelta deve esistere e non essere piena: "19:00".'];
-        yield 'fascia scelta piena' => [[new Slot('18:30', 5, 5)], '18:30', 'La fascia scelta deve esistere e non essere piena: "18:30".'];
+        yield 'capienza diversa' => [[Slot::example('18:30', 4, 1)], '18:30', 'La fascia delle 18:30 non ha 5 posti.'];
+        yield 'fascia scelta inesistente' => [[Slot::example('18:30', 5, 1)], '19:00', 'La fascia scelta deve esistere e non essere piena: "19:00".'];
+        yield 'fascia scelta piena' => [[Slot::example('18:30', 5, 5)], '18:30', 'La fascia scelta deve esistere e non essere piena: "18:30".'];
     }
 
     /**

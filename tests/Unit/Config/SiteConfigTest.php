@@ -15,12 +15,6 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(InvalidSiteConfig::class)]
 final class SiteConfigTest extends TestCase
 {
-    private const array BOOKING = [
-        'capacity' => 5,
-        'example_slots' => ['17:30' => 5, '18:30' => 3],
-        'default_slot' => '18:30',
-    ];
-
     public function testReadsAValidConfiguration(): void
     {
         $config = SiteFixture::config();
@@ -38,9 +32,11 @@ final class SiteConfigTest extends TestCase
         self::assertTrue($config->content->showPlaceholders);
         self::assertNull($config->content->hours);
         self::assertNull($config->content->roomPhoto);
-        self::assertSame(5, $config->booking->capacity());
-        self::assertCount(6, $config->booking->slots());
-        self::assertSame('18:30', $config->booking->defaultSlot()->time);
+        self::assertTrue($config->booking->online);
+        self::assertSame(5, $config->booking->capacity);
+        self::assertSame(14, $config->booking->daysAhead);
+        self::assertCount(6, $config->booking->examples->slots());
+        self::assertSame('18:30', $config->booking->examples->defaultSlot()->time);
     }
 
     public function testThePlaceholderSwitchAndTheContent(): void
@@ -164,10 +160,11 @@ final class SiteConfigTest extends TestCase
         yield 'orari su due righe' => [['content' => ['hours' => "Lun-Ven\nSab"]], '"content.hours" deve stare su una riga'];
         yield 'foto fuori posto' => [['content' => ['photos' => ['room' => ['src' => '/sala.jpg', 'width' => 1, 'height' => 1, 'alt' => 'x']]]], '"content.photos.room.src" deve essere un file'];
         yield 'privacy senza schema' => [['content' => ['privacy_url' => 'fourstreet.studio/privacy']], '"content.privacy_url" deve essere vuoto oppure un indirizzo completo'];
-        yield 'prenotazione sconosciuta' => [['booking' => [...self::BOOKING, 'max' => 5]], 'chiavi sconosciute in "booking" (max)'];
-        yield 'capienza zero' => [['booking' => [...self::BOOKING, 'capacity' => 0]], '"booking.capacity" deve essere un numero intero maggiore di zero'];
-        yield 'fascia oltre la capienza' => [['booking' => [...self::BOOKING, 'example_slots' => ['18:30' => 6]]], '"booking.example_slots.18:30" deve essere il numero di posti occupati, da 0 a 5'];
-        yield 'fascia scelta piena' => [['booking' => [...self::BOOKING, 'default_slot' => '17:30']], '"booking.default_slot" deve essere l\'orario di una fascia di esempio non piena'];
+        yield 'prenotazione sconosciuta' => [['booking' => SiteFixture::booking(['max' => 5])], 'chiavi sconosciute in "booking" (max)'];
+        yield 'capienza zero' => [['booking' => SiteFixture::booking(['capacity' => 0])], '"booking.capacity" deve essere un numero intero maggiore di zero'];
+        yield 'fascia oltre la capienza' => [['booking' => SiteFixture::booking(['example_slots' => ['18:30' => 6]])], '"booking.example_slots.18:30" deve essere il numero di posti occupati, da 0 a 5'];
+        yield 'fascia scelta piena' => [['booking' => SiteFixture::booking(['default_slot' => '17:30'])], '"booking.default_slot" deve essere l\'orario di una fascia di esempio non piena'];
+        yield 'giorno della settimana sbagliato' => [['booking' => SiteFixture::booking(['schedule' => ['lunedi' => [], 'lundi' => []]])], '"booking.schedule" ha un giorno sconosciuto'];
     }
 
     /**

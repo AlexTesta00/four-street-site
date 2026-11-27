@@ -30,6 +30,8 @@ final class Icons
         'info' => '<circle cx="12" cy="12" r="9"></circle><path d="M12 10.5v6"></path><path d="M12 7.5h.01"></path>',
         'mail' => '<path d="M3 5h18v14H3z"></path><path d="M3 6l9 7 9-7"></path>',
         'exit' => '<path d="M14 4h6v16h-6"></path><path d="M10 8l-4 4 4 4"></path><path d="M6 12h10"></path>',
+        // Il link all'area clienti.
+        'user' => '<circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path>',
     ];
 
     /**

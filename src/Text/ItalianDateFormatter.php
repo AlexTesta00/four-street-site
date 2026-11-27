@@ -44,4 +44,16 @@ final class ItalianDateFormatter
         // I giorni iniziano tutti con una lettera ASCII: ucfirst basta.
         return $capitalize ? ucfirst($text) : $text;
     }
+
+    /** Il mese abbreviato dei calendari: "dic". Le prime tre lettere bastano per tutti i mesi italiani. */
+    public function shortMonth(DateTimeInterface $date): string
+    {
+        return substr(self::MONTHS[(int) $date->format('n')], 0, 3);
+    }
+
+    /** Il giorno della settimana abbreviato dei calendari: "lun". */
+    public function shortWeekday(DateTimeInterface $date): string
+    {
+        return mb_substr(self::WEEKDAYS[(int) $date->format('w')], 0, 3);
+    }
 }

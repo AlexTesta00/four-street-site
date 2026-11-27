@@ -31,7 +31,6 @@ final class EntryPointTest extends TestCase
     public function testServesThePages(): void
     {
         self::assertStringContainsString('<title>4Street · Link</title>', self::serve('GET', '/links/'));
-        self::assertStringContainsString('<span data-state="open">Siamo aperti.</span>', self::serve('GET', '/?anteprima=mappa'));
         self::assertStringContainsString('<title>4Street · Pagina non trovata</title>', self::serve('GET', '/non-esiste'));
     }
 
@@ -44,23 +43,47 @@ final class EntryPointTest extends TestCase
     {
         $temporary = new TemporaryDirectory();
         try {
-            $config = $temporary->file('local.php', '<?php return ' . var_export([
-                'base_url' => 'http://127.0.0.1:8089',
-                'secret' => str_repeat('s', 32),
-                'database' => ['dsn' => 'sqlite:' . $temporary->path . '/4street.sqlite'],
-                'mail' => ['transport' => 'file', 'directory' => $temporary->path . '/mail', 'from' => 'prove@fourstreet.studio'],
-            ], true) . ';');
+            $config = self::localConfig($temporary);
 
             $login = self::serve('GET', '/account/accedi/', [LocalConfig::FILE_VARIABLE => $config]);
             self::assertStringContainsString('<title>4Street · Accedi</title>', $login);
 
             [$exitCode, $output] = self::runPhp([SiteFixture::rootDirectory() . '/bin/console', 'migrate'], [LocalConfig::FILE_VARIABLE => $config]);
             self::assertSame(0, $exitCode);
-            self::assertStringContainsString('Database aggiornato: 4 migrazioni applicate.', $output);
+            self::assertStringContainsString('Database aggiornato: 5 migrazioni applicate.', $output);
             self::assertFileExists($temporary->path . '/4street.sqlite');
         } finally {
             $temporary->remove();
         }
+    }
+
+    public function testTheHomeReadsTheSlotsFromTheConfiguredDatabase(): void
+    {
+        // Con le prenotazioni attive la home legge i posti: dal database indicato, già migrato, senza errori nel log.
+        $temporary = new TemporaryDirectory();
+        try {
+            $config = self::localConfig($temporary);
+            [$exitCode] = self::runPhp([SiteFixture::rootDirectory() . '/bin/console', 'migrate'], [LocalConfig::FILE_VARIABLE => $config]);
+            self::assertSame(0, $exitCode);
+
+            $home = self::serve('GET', '/?anteprima=mappa', [LocalConfig::FILE_VARIABLE => $config]);
+
+            self::assertStringContainsString('<span data-state="open">Siamo aperti.</span>', $home);
+            self::assertStringContainsString('id="fasce"', $home);
+        } finally {
+            $temporary->remove();
+        }
+    }
+
+    /** Una configurazione locale nella cartella temporanea: SQLite e posta in file. */
+    private static function localConfig(TemporaryDirectory $temporary): string
+    {
+        return $temporary->file('local.php', '<?php return ' . var_export([
+            'base_url' => 'http://127.0.0.1:8089',
+            'secret' => str_repeat('s', 32),
+            'database' => ['dsn' => 'sqlite:' . $temporary->path . '/4street.sqlite'],
+            'mail' => ['transport' => 'file', 'directory' => $temporary->path . '/mail', 'from' => 'prove@fourstreet.studio'],
+        ], true) . ';');
     }
 
     public function testTheConsoleListsItsCommands(): void

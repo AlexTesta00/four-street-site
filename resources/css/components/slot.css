@@ -1,7 +1,9 @@
 /* ---------- Fasce orarie ----------
    Un gruppo di radio. Ogni fascia è una riga panel: orario, posti (fs-seat) e capienza ("3/5"),
    oppure il tag "Completo". La radio vera resta invisibile ma raggiungibile da tastiera:
-   la riga che la segue ne mostra lo stato (scelta, focus, piena), anche senza JavaScript. */
+   la riga che la segue ne mostra lo stato (scelta, focus, piena), anche senza JavaScript.
+   Nella pagina delle prenotazioni la stessa riga è un link alla conferma (--link), una riga ferma
+   (piena o chiusa: --off), la fascia già prenotata (--mine) o, senza i posti, solo l'orario (--plain). */
 
 @layer components {
   .fs-slots {
@@ -82,12 +84,78 @@
     justify-self: end;
   }
 
+  /* Le righe che non sono una radio: niente mano, se non sono un link */
+  div.fs-slot__row,
+  li.fs-slot__row {
+    cursor: default;
+  }
+  /* Un link alla conferma: la riga intera si tocca, con la freccia in fondo */
+  .fs-slot__row--link {
+    grid-template-columns: 56px minmax(0, 1fr) auto 20px;
+    text-decoration: none;
+  }
+  a.fs-slot__row:hover {
+    background: var(--color-panel-hover);
+    border-color: var(--color-control);
+  }
+  a.fs-slot__row:active {
+    transform: translateY(1px);
+  }
+  a.fs-slot__row:focus-visible {
+    /* Invisibile di solito; in Windows a contrasto elevato (forced colors) l'ombra sparisce e resta questo */
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    box-shadow: var(--focus-ring);
+  }
+  /* Al passaggio (o al focus) il posto che sarebbe tuo si accende d'oro, come nella fascia scelta */
+  a.fs-slot__row:is(:hover, :focus-visible) .fs-seat--next {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+  .fs-slot__arrow {
+    width: 20px;
+    height: 20px;
+    color: var(--color-fg-muted);
+    transition:
+      transform var(--duration-fast) var(--ease-out-soft),
+      color var(--duration-fast) var(--ease-out-soft);
+  }
+  a.fs-slot__row:hover .fs-slot__arrow {
+    transform: translate(2px, -2px);
+    color: var(--color-fg);
+  }
+  .fs-slot__row--off {
+    border-color: var(--color-hairline);
+    color: var(--color-fg-subtle);
+  }
+  .fs-slot__row--off .fs-seat--taken {
+    background: var(--color-fg-subtle);
+    border-color: var(--color-fg-subtle);
+  }
+  .fs-slot__row--mine {
+    background: var(--color-accent-tint);
+    border-color: var(--color-accent-line);
+  }
+  /* Solo l'orario (il database non risponde): un elenco, non righe da toccare */
+  .fs-slot__row--plain {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 44px;
+    background: transparent;
+    border-color: var(--color-hairline);
+  }
+
   @media (min-width: 1024px) {
     .fs-slot__row {
       grid-template-columns: 72px minmax(0, 1fr) auto;
       gap: 24px;
       min-height: 56px;
       padding: 0 20px;
+    }
+    .fs-slot__row--link {
+      grid-template-columns: 72px minmax(0, 1fr) auto 20px;
+    }
+    .fs-slot__row--plain {
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 }

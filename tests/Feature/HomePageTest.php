@@ -195,11 +195,11 @@ final class HomePageTest extends TestCase
 
     public function testTheCapacityDrivesEveryNumber(): void
     {
-        $html = SiteFixture::handle('GET', '/', self::BEFORE, ['booking' => [
+        $html = SiteFixture::handle('GET', '/', self::BEFORE, ['booking' => SiteFixture::booking([
             'capacity' => 6,
             'example_slots' => ['10:00' => 6, '19:00' => 2],
             'default_slot' => '19:00',
-        ]])->body;
+        ])])->body;
 
         self::assertStringContainsString('<span class="fs-numeral fs-chrome fs-anim-sheen fs-step-20">6</span>', $html);
         self::assertStringContainsString('<span class="sr-only">6 </span>persone per fascia oraria.', $html);

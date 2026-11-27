@@ -2,12 +2,13 @@
 
 Sito di 4Street, palestra a San Marino: [fourstreet.studio](https://fourstreet.studio).
 
-Oggi il sito ha tre indirizzi pubblici e l'area clienti:
+Oggi il sito ha tre indirizzi pubblici, l'area clienti e la prenotazione delle fasce:
 
-- `/`: la landing. La regola dei cinque posti per fascia oraria, come funzionerà la prenotazione, lo spazio, dove siamo con la mappa illustrata, le domande frequenti e l'invito a venire. Su mobile e tablet una barra in fondo allo schermo tiene a portata "Vieni a trovarci" e WhatsApp. Fino all'inaugurazione la pagina ha il conto alla rovescia; allo zero passa allo stato "aperti" senza ricaricare, e dal giorno dell'apertura il server la scrive già così. Per provare gli stati: `/?anteprima=mappa` (la pagina come se fossimo aperti) e `/?anteprima=zero` (il conto arriva a zero dopo 12 secondi).
+- `/`: la landing. La regola dei cinque posti per fascia oraria, come si prenota (con le fasce vere del primo giorno con un posto libero, quando le prenotazioni sono attive), lo spazio, dove siamo con la mappa illustrata, le domande frequenti e l'invito a venire. Su mobile e tablet una barra in fondo allo schermo tiene a portata "Vieni a trovarci" e WhatsApp. Fino all'inaugurazione la pagina ha il conto alla rovescia; allo zero passa allo stato "aperti" senza ricaricare, e dal giorno dell'apertura il server la scrive già così. Per provare gli stati: `/?anteprima=mappa` (la pagina come se fossimo aperti) e `/?anteprima=zero` (il conto arriva a zero dopo 12 secondi).
 - `/links/`: la pagina dei link.
 - `/calendario.php`: l'evento dell'inaugurazione da aggiungere al calendario (file `.ics`).
-- `/account/…`: l'area clienti, cioè registrazione con email confermata, accesso, password dimenticata e pagina dell'account (vedi [Area clienti](#area-clienti)). La landing non ha ancora link verso l'area clienti: arriveranno con la prenotazione delle fasce.
+- `/account/…`: l'area clienti, cioè registrazione con email confermata, accesso, password dimenticata e pagina dell'account con le prenotazioni (vedi [Area clienti](#area-clienti)). La landing la collega con un link fisso ("Area clienti"), uguale per tutti.
+- `/prenota/…`: la scelta del giorno e della fascia, il riepilogo e la conferma; la disdetta sta nell'account (vedi [Prenotazioni](#prenotazioni)).
 
 Stack: HTML, Tailwind CSS, JavaScript e PHP, senza framework. Produzione: hosting condiviso Hostinger, PHP 8.3, Apache/LiteSpeed con `.htaccess`, deploy via FTPS in `public_html`.
 
@@ -59,15 +60,99 @@ Orari, prezzi, cosa c'è in sala, le tre foto della sezione "Lo spazio", l'infor
 - `show_placeholders` è l'interruttore. Con `false` la pagina toglie tutto ciò che conterrebbe solo un segnaposto: la riga degli orari, le domande su orari e prezzi, la frase sulla sala, le foto che mancano, i dati legali. Così il sito può andare online senza segnaposto prima che arrivino i contenuti.
 - Un contenuto compilato va in pagina com'è: le foto come immagini (file in `public/assets/img/`, con larghezza, altezza e testo alternativo), l'informativa come link.
 
-"Mappa illustrativa" e "[Fasce illustrative]" non sono segnaposto: dicono il vero (la mappa è un disegno, le fasce sono esempi) e restano sempre.
+"Mappa illustrativa" e "[Fasce illustrative]" non sono segnaposto: dicono il vero (la mappa è un disegno, le fasce sono esempi) e restano finché le prenotazioni dal sito non sono attive.
 
-## Prenotazioni: l'aggancio per la fase successiva
+## Prenotazioni
 
-La sezione "Come funziona" mostra come si prenoterà: un gruppo di radio con le fasce di esempio, che funziona anche senza JavaScript; lo script aggiorna solo il riepilogo "La tua fascia". Prenotare dal sito non si può ancora: il bottone "Prenota il posto" è disattivato e la pagina rimanda a WhatsApp.
+Il cliente sceglie una fascia, accede (o si registra e conferma l'email) e conferma: gli arriva un'email con i dettagli e l'evento da aggiungere al calendario. Massimo cinque persone per fascia. La prenotazione si vede e si disdice dall'account; anche la disdetta manda un'email. Le pagine funzionano senza JavaScript e su schermi da 320px; lo script aggiunge solo il riepilogo della fascia scelta sulla landing e il blocco del doppio invio.
 
-- `booking.capacity` in `config/site.php` è il numero di posti per fascia: da lì vengono tutti i numeri della pagina (la cifra grande, i quadrati dei posti, "3/5", "posto 4 di 5"). Il testo che scrive "cinque" in lettere resta com'è.
-- In `src/Booking/`: `Slot` è una fascia (orario, posti, posti presi), `SlotCatalog` è l'interfaccia che dà le fasce alla pagina, `ExampleSlotCatalog` la implementa con le fasce di `booking.example_slots`.
-- Con le prenotazioni vere, in `Application::create()` un catalogo che legge il database prenderà il posto di `ExampleSlotCatalog`: controller e template restano come sono.
+### Le regole (provvisorie, da confermare con il titolare)
+
+Stanno tutte nella sezione `booking` di `config/site.php`, scritte perché le possa cambiare anche chi non programma. Un valore sbagliato ferma il sito con un messaggio che nomina la chiave ("`booking.schedule.sabato` ha due fasce che si sovrappongono, alle 18:00 e alle 18:30").
+
+| Chiave                          | Oggi                                                        | Cosa                                                                                                                             |
+| ------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `online`                        | `true`                                                      | l'interruttore delle prenotazioni dal sito (servono anche database e posta in `config/local.php`)                                |
+| `capacity`                      | `5`                                                         | posti per fascia: da qui tutti i numeri delle pagine (la cifra grande, i quadrati, "3/5", "posto 4 di 5")                        |
+| `schedule`                      | da lunedì a sabato 07:00, 09:30, 12:30, 17:30, 18:30, 20:00 | per ogni giorno della settimana gli orari d'inizio; `[]` è un giorno chiuso (oggi la domenica)                                   |
+| `slot_minutes`                  | `60`                                                        | quanto dura una fascia: serve all'evento del calendario; le fasce di un giorno non si sovrappongono e finiscono entro mezzanotte |
+| `days_ahead`                    | `14`                                                        | si prenota da oggi fino a quattordici giorni dopo (0: solo oggi)                                                                 |
+| `closed_dates`                  | `[]`                                                        | giorni di chiusura, `AAAA-MM-GG`                                                                                                 |
+| `booking_closes_minutes_before` | `0`                                                         | la prenotazione chiude questi minuti prima dell'inizio (0: all'inizio)                                                           |
+| `cancel_closes_minutes_before`  | `0`                                                         | la disdetta chiude questi minuti prima dell'inizio (0: all'inizio)                                                               |
+| `max_upcoming`                  | `6`                                                         | prenotazioni future attive per cliente                                                                                           |
+| `example_slots`, `default_slot` | come prima                                                  | le fasce di esempio della landing, finché le prenotazioni non sono attive                                                        |
+
+Regole fisse: una sola prenotazione attiva per cliente al giorno; nessuna fascia prima dell'inaugurazione (`opening`): il primo giorno prenotabile è quello dell'apertura, dalle fasce che iniziano dall'ora d'apertura in poi (oggi il 6 dicembre è domenica, chiusa: si comincia lunedì 7).
+
+Giorni e orari delle fasce sono ora di San Marino (`timezone`). Una fascia è un giorno e un orario d'inizio; i confronti con "adesso" si fanno sugli istanti, e i giorni si contano sul calendario, mai sommando ore: il cambio dell'ora non sposta nulla. Il giorno del passaggio all'ora legale l'ora che manca (02:00-03:00) non ha fasce; nel giorno del ritorno all'ora solare un'ora doppia vale una volta sola. La durata di una fascia è tempo reale.
+
+### Il percorso
+
+| Indirizzo                                  | Cosa fa                                                                                                                                                          |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/` (sezione "Come funziona")              | le fasce del primo giorno con un posto libero, con i posti veri; "Prenota il posto" è un modulo GET verso il riepilogo della fascia scelta. Resta WhatsApp       |
+| `/prenota/?giorno=AAAA-MM-GG`              | pubblica: i giorni prenotabili (link, senza JavaScript) e le fasce del giorno scelto; una fascia libera è un link al riepilogo. Riconosce chi ha fatto l'accesso |
+| `/prenota/conferma/?giorno=…&fascia=HH:MM` | solo dopo l'accesso: il riepilogo (giorno, orario, posto, indirizzo) e "Conferma la prenotazione"; con POST prenota e torna all'account (303)                    |
+| `/account/`                                | le prossime prenotazioni (giorno, orario, posto) con "Disdici"; quella in corso resta fino alla fine della fascia                                                |
+| `/account/prenotazioni/{id}/disdici/`      | GET chiede conferma, POST disdice e torna all'account (303)                                                                                                      |
+
+- Chi non ha fatto l'accesso passa dalla pagina di accesso (o dalla registrazione e dal link dell'email) e torna da solo al riepilogo: la destinazione viaggia nel parametro `ritorno`.
+- Gli esiti hanno pagine chiare e i codici giusti: fascia piena (anche nel frattempo), già prenotato quel giorno, troppe prenotazioni future, fascia chiusa (iniziata o passata): 409; fascia o giorno inesistenti e parametri manomessi: 404; troppi tentativi: 429 con `Retry-After`; modulo senza token CSRF: 403. Lo stesso modulo inviato due volte porta all'account con la prenotazione che c'è già.
+- Una disdetta vale solo per una prenotazione propria, attiva e non ancora iniziata (secondo `cancel_closes_minutes_before`): tutto il resto è 404, senza dire di chi sia la prenotazione.
+- Limiti dei tentativi, sul database come per l'area clienti: prenotazioni e disdette contano insieme, 12 ogni 15 minuti per account e 60 per indirizzo IP (largo: chi è in palestra esce su internet con lo stesso indirizzo).
+- Le email partono subito, non dopo la risposta: la prenotazione vale comunque, e se l'email non parte l'errore va nel log e l'avviso sull'account lo dice. La conferma ha in allegato `prenotazione-4street.ics` (con l'UID `prenotazione-{id}@` più l'host del sito, stabile per prenotazione); la disdetta non ha allegati.
+
+### Posti e gare
+
+La capienza la garantisce il database, non un conteggio. Ogni prenotazione attiva ha un posto da 1 a `capacity`, con un vincolo `UNIQUE (giorno, orario, posto)`: chi prenota prende il primo posto libero; se due richieste scelgono insieme lo stesso, il database ne fa passare una e l'altra riprova con il successivo, in una transazione nuova; finiti i posti, "fascia completa". Una prenotazione disdetta libera il posto (`seat` e `active` a NULL: i NULL non si scontrano nei vincoli UNIQUE, né su SQLite né su MySQL) e resta come storico. Allo stesso modo `UNIQUE (cliente, giorno, active)` tiene una sola prenotazione attiva per cliente al giorno. Il controllo "al massimo `max_upcoming` future" vale anche con due richieste insieme: la prenotazione blocca prima la riga del cliente in `users`, così le sue prenotazioni passano una alla volta.
+
+Abbassare `capacity` non cancella nessuna prenotazione: una fascia con più prenotazioni dei posti nuovi resta piena finché non se ne liberano.
+
+### La landing e il database
+
+La landing non dipende mai dal database: lo legge una volta sola (i posti dei giorni prenotabili), senza sessione né riconoscimento del visitatore, dentro un guscio che a qualunque errore lo registra nel log e mostra gli orari senza numeri con il link a `/prenota/`; se anche quelli non si potessero calcolare, le fasce di esempio. Un database spento non dà mai 500 sulla home, su `/links/` o su `/calendario.php` (`tests/Feature/Account/DatabaseIndependenceTest.php`); link e calendario non lo aprono nemmeno. Con le prenotazioni attive la home risponde `Cache-Control: no-cache` (il browser la richiede ogni volta, i posti sono sempre quelli veri); senza, resta com'era.
+
+Una connessione a MySQL che non risponde rinuncia dopo 5 secondi, così un database bloccato non tiene ferma la pagina.
+
+### Attive, spente, senza server
+
+- `booking.online` a `true` e `config/local.php` sul server: tutto come sopra.
+- `booking.online` a `false`: la landing mostra le fasce di esempio con il bottone "Presto", la pagina dei link dice "Presto", `/prenota/` e il riepilogo rispondono "Prenotazioni presto" (503, una pagina cortese). Chi ha già una prenotazione la vede nell'account e la può disdire.
+- Senza `config/local.php` (il pacchetto appena caricato): come con `false`, e la disdetta risponde come il resto dell'area clienti ("non ancora attiva").
+
+### La tabella `bookings`
+
+`id`, `user_id` (il cliente; cancellato l'account, se ne vanno anche le sue prenotazioni), `slot_date` e `slot_time` (la fascia, ora di San Marino), `starts_at` (lo stesso inizio in UTC, per i confronti con adesso), `seat` (il posto, NULL se disdetta), `active` (1, NULL se disdetta), `created_at`, `cancelled_at` e `cancelled_by` (`customer` oppure `admin`). Vincoli: `UNIQUE (slot_date, slot_time, seat)`, `UNIQUE (user_id, slot_date, active)` e i `CHECK` che tengono coerenti posto, stato e disdetta.
+
+### Privacy
+
+Una prenotazione dice chi si allena in palestra, quando: è un dato personale. Nella tabella ci sono solo il riferimento all'account, la fascia, il posto e gli istanti di prenotazione e disdetta; niente indirizzi IP (i limiti dei tentativi ne tengono solo l'impronta con chiave, e la cancellano alla scadenza). Le prenotazioni restano come storico anche dopo la fascia o la disdetta, finché non si cancella l'account: quanto tenerle (per esempio un anno) e come dirlo nell'informativa va deciso con il titolare. Le vede solo il cliente, nel suo account; la pagina del titolare arriverà con lo Sprint 3.
+
+### Da confermare con il titolare
+
+- Gli orari delle fasce, la domenica chiusa, i giorni di chiusura (festività).
+- La durata delle fasce (60 minuti), i giorni prenotabili in anticipo (14), il massimo di prenotazioni future (6).
+- Fino a quando si prenota e si disdice (oggi fino all'inizio della fascia): un preavviso di disdetta libera i posti per gli altri.
+- I posti per fascia (5) e cosa fare di chi non si presenta (oggi nulla).
+- Per quanto tenere lo storico delle prenotazioni e l'informativa privacy.
+
+### Moduli
+
+```text
+src/Booking/            prenotazioni: regole, calendario, prenotazione e disdetta, email
+  BookingRules          la sezione booking di config/site.php, validata (WeeklySchedule, Weekday, LocalDate, SlotTime)
+  BookingCalendar       quali fasce esistono e fino a quando si prenotano e si disdicono (senza database)
+  SlotBooking           check() e book(): la prenotazione di un cliente, con il limite dei tentativi e l'email
+  BookingCancellation   cancellable() e cancel(): la disdetta del cliente
+  SlotBoard, BookingAgenda  le fasce con i posti (pagina /prenota/, landing) e le prenotazioni di un cliente
+  BookingRepository     l'interfaccia; PdoBookingRepository la implementa (SQLite e MySQL/MariaDB)
+  Http/                 controller, avvisi dell'account, la sezione "Le tue prenotazioni" (DashboardSection)
+  Landing/              le fasce della landing: vere, solo orari, esempi, e il guscio che le protegge
+  BookingModule.php     collega tutto; dà ad Application rotte, sezione dell'account e fasce della landing
+```
+
+L'area clienti non conosce le prenotazioni: mette in pagina le `DashboardSection` che riceve (`AccountModule::create()`).
 
 ## Area clienti
 
@@ -84,7 +169,7 @@ L'account del cliente, con l'email confermata. Le pagine hanno un layout compatt
 | `/account/password-dimenticata/`                    | chiede il link per una nuova password                                                                                                    |
 | `/account/password-dimenticata/controlla-la-posta/` | la pagina dopo la richiesta                                                                                                              |
 | `/account/nuova-password/?token=…`                  | la password nuova: chiude le sessioni su ogni dispositivo, fa entrare e manda un'email di avviso                                         |
-| `/account/`                                         | solo dopo l'accesso: saluto, dati dell'account, prenotazioni (vuote finché non c'è la prenotazione), uscita                              |
+| `/account/`                                         | solo dopo l'accesso: saluto, le prossime prenotazioni con "Disdici", dati dell'account, uscita                                           |
 
 Come funziona:
 
@@ -101,7 +186,7 @@ Come funziona:
 - Destinazione dopo l'accesso: il parametro `ritorno` (o il campo nascosto omonimo) vale solo se è un percorso interno scritto in modo pulito e non è una pagina dell'accesso; altrimenti si va a `/account/`. Sopravvive anche al giro registrazione → email → conferma (resta nel database con il link).
 - Le pagine dell'area clienti rispondono `Cache-Control: no-store`, `X-Robots-Tag: noindex` e hanno `<meta name="robots" content="noindex">`; quelle con un token nell'indirizzo anche `Referrer-Policy: no-referrer`. POST riuscito: redirect 303. Modulo con errori: 422, con il riepilogo degli errori, `aria-invalid`, `aria-describedby` e i valori ricompilati (mai la password).
 - Un'email che non parte non è mai un errore 500: si registra nel log; dopo la registrazione la pagina propone di chiedere un nuovo link.
-- Senza `config/local.php` sul server, ogni pagina dell'area clienti risponde 503 con una pagina cortese; home, link e calendario non aprono mai il database, nemmeno quando l'area clienti è configurata.
+- Senza `config/local.php` sul server, ogni pagina dell'area clienti risponde 503 con una pagina cortese; link e calendario non aprono mai il database, e la home lo legge solo per i posti delle fasce, dentro un guscio che non la fa mai cadere (vedi [Prenotazioni](#la-landing-e-il-database)).
 
 ## Configurazione locale
 
@@ -139,7 +224,7 @@ php bin/console prune            # cancella sessioni, link e contatori scaduti
 
 In sviluppo, prima di provare l'area clienti: `npm run migrate` (crea `var/4street.sqlite`).
 
-Tabelle: `users` (account; email unica e già in minuscolo; ruolo `customer` o `admin`), `sessions`, `account_tokens` (link delle email), `rate_limits` (contatori dei tentativi).
+Tabelle: `users` (account; email unica e già in minuscolo; ruolo `customer` o `admin`), `sessions`, `account_tokens` (link delle email), `rate_limits` (contatori dei tentativi), `bookings` (prenotazioni, vedi [la tabella](#la-tabella-bookings)).
 
 ## Posta
 
@@ -168,15 +253,23 @@ src/Security/         Token, Fingerprinter, IpAddress, Csrf/, Password/, RateLim
 src/Backend.php       database, posta, password e impostazioni locali, passati ad Application::create()
 ```
 
-`Application::create()` resta l'unico punto in cui le dipendenze si collegano: ogni modulo porta le sue rotte già pronte. Per i moduli che verranno (le prenotazioni):
+`Application::create()` resta l'unico punto in cui le dipendenze si collegano: ogni modulo porta le sue rotte già pronte (le prenotazioni sono costruite così, in `BookingModule`). Per i moduli che verranno:
 
 - **Una rotta riservata a chi ha fatto l'accesso**: `Route::form('/prenota/', $controller)->through(...$accountModule->guards()->member())`. `guards()->page()` dà le stesse protezioni (no-store, CSRF, visitatore riconosciuto) senza obbligare all'accesso; `guards()->tokenPage()` aggiunge `Referrer-Policy: no-referrer`.
 - **L'utente corrente**: `Visitor::of($request)->user` (null per un ospite), oppure `Visitor::of($request)->user()` nelle rotte con `member()`.
 - **Il token CSRF per un modulo**: `CsrfToken::of($request)->value`, nel partial `partials/form/hidden`.
 - **La destinazione dopo l'accesso**: `AccountUrls::to(AccountUrls::LOGIN, ReturnPath::fromInput('/prenota/…'))`; `RequireLogin` la mette da solo quando rimanda alla pagina di accesso.
+- **Una sezione nella pagina dell'account**: una classe che implementa `FourStreet\Account\Http\DashboardSection`, passata ad `AccountModule::create()` (come "Le tue prenotazioni").
 - **Un'email con un allegato**: `$mailTemplates->message($user->mailbox(), 'Oggetto', 'nome-template', $dati)->withAttachment(new Attachment('prenotazione.ics', 'text/calendar; charset=utf-8; method=PUBLISH', $ics))`, poi `$backend->mailer->send($message)`, che lancia `MailNotSent` se non parte; oppure `$outbox->queue($message)` (la `Outbox` che `Application::create()` passa ai moduli) per mandarla dopo la risposta, quando la pagina non deve aspettare né dire se è partita. `$user->mailbox()` mette il nome solo a email confermata.
-- **Una migrazione**: un file nuovo in `database/migrations/` (per esempio `0005_create_bookings.php`) che restituisce un oggetto `Migration` con le istruzioni per SQLite e per MySQL, come le altre.
+- **Una migrazione**: un file nuovo in `database/migrations/` (per esempio `0006_….php`) che restituisce un oggetto `Migration` con le istruzioni per SQLite e per MySQL, come le altre.
 - **Un comando**: una classe che implementa `FourStreet\Console\Command` e una riga in `ConsoleApplication::create()`.
+
+Per la pagina del titolare (Sprint 3), dalle prenotazioni:
+
+- **Chi è prenotato in una fascia**: `BookingRepository::occupancy()` dà i posti presi; per i nomi serve un metodo nuovo che legga le prenotazioni attive di una fascia con il loro cliente (una lettura con `JOIN users`).
+- **Disdire per un cliente**: `BookingRepository::cancel($id, $adesso, CancelledBy::Admin)`; l'email si manda con `BookingNotifier::cancelled()` (il testo oggi parla di una disdetta fatta dal cliente: va adattato).
+- **Prenotare per un cliente**: `BookingRepository::place($idCliente, $fascia, $posti, null, $adesso)` (null: senza il limite delle prenotazioni future) con la fascia di `BookingCalendar::slot()`; poi `BookingNotifier::booked()`. Le regole di `SlotBooking` (finestre, limite dei tentativi) valgono per i clienti; per il titolare si sceglie quali tenere.
+- **Il calendario delle fasce**: `BookingCalendar` (`days()`, `slotsOn()`, `seating()`) e `SlotBoard` sono già senza HTTP.
 
 ## Prima di andare online
 
@@ -186,9 +279,10 @@ Cosa serve sul server Hostinger perché l'area clienti funzioni (fino ad allora 
 2. **Casella email** per il mittente (per esempio `prenotazioni@fourstreet.studio`): hPanel, Email. SMTP `smtp.hostinger.com`, porta 465. Controlla che il dominio abbia SPF, DKIM e DMARC (hPanel, Email, autenticazione), altrimenti le email finiscono nello spam.
 3. **`config/local.php`**: dal File Manager di hPanel copia `public_html/_app/config/local.example.php` in `public_html/_app/config/local.php` e compila `secret`, `database` e `mail`. Il file non è raggiungibile dal browser (`_app/` è chiusa) e il deploy non lo tocca mai.
 4. **Migrazioni**: via SSH (hPanel, Avanzate, Accesso SSH) da `public_html`: `php _app/bin/console migrate`. Senza SSH: un cron job di una volta sola in hPanel con lo stesso comando, poi cancellalo. Da ripetere dopo ogni deploy che aggiunge una migrazione; `php _app/bin/console migrate:status` dice se ne manca qualcuna.
-5. **Informativa privacy**: la registrazione chiede di averla letta. Pubblicala e metti il suo indirizzo in `content.privacy_url` di `config/site.php` prima di aprire la registrazione.
-6. **Prova**: registrati con un'email vera, apri il link, entra, esci, chiedi una nuova password.
-7. Facoltativo: un cron giornaliero `php _app/bin/console prune` (la pulizia avviene comunque a ogni accesso).
+5. **Informativa privacy**: la registrazione chiede di averla letta. Pubblicala e metti il suo indirizzo in `content.privacy_url` di `config/site.php` prima di aprire la registrazione. Deve parlare anche delle prenotazioni (vedi [Privacy](#privacy)).
+6. **Prenotazioni**: conferma con il titolare le regole della sezione `booking` di `config/site.php` (orari, chiusure, durata, giorni in anticipo, limiti). Le pagine per prenotare si accendono con `booking.online` a `true` (oggi è già così: senza `config/local.php` rispondono "Prenotazioni presto"); dopo il deploy che porta la migrazione `0005_create_bookings` va lanciato subito `migrate`: fino ad allora la home mostra gli orari senza i posti, l'account dice che le prenotazioni non si possono mostrare, `/prenota/` risponde con un errore, e ogni volta l'errore finisce nel log.
+7. **Prova**: registrati con un'email vera, apri il link, entra, prenota una fascia (arriva l'email con l'evento da aggiungere al calendario), disdicila, esci, chiedi una nuova password.
+8. Facoltativo: un cron giornaliero `php _app/bin/console prune` (la pulizia avviene comunque a ogni accesso).
 
 Se il sito passa dietro un CDN o un proxy (Cloudflare, il CDN di Hostinger), l'indirizzo del client non è più `REMOTE_ADDR`: i limiti per IP vanno rivisti prima di attivarlo.
 
@@ -359,15 +453,15 @@ Non fa commit nella repo: niente changelog e niente versione in `package.json`. 
 
 Un solo workflow: `.github/workflows/ci.yml`.
 
-| Job                 | Quando                                                     | Cosa fa                                                                                                                                                                          |
-| ------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| PHP 8.3 e 8.4       | ogni push su `develop` e `main`, ogni pull request         | `composer validate --strict`, dipendenze, `composer lint`, `composer analyse`, `composer test` (database SQLite in memoria)                                                      |
-| Database MariaDB    | come sopra                                                 | con un servizio MariaDB 10.11: `bin/console migrate` due volte (la seconda non deve fare nulla), poi i test del gruppo `database` su MariaDB                                     |
-| Front-end           | come sopra                                                 | `npm ci`, lint, formattazione, test, build                                                                                                                                       |
-| Messaggi di commit  | come sopra                                                 | commitlint sui commit del push o della pull request                                                                                                                              |
-| Pacchetto di deploy | come sopra                                                 | `npm run assemble` con PHP 8.3, `npm run smoke` (anche l'area clienti: 503 senza configurazione, poi un giro completo con una configurazione temporanea), artefatto `site-build` |
-| Deploy su Hostinger | push su `main` o avvio manuale su `main`, dopo i job sopra | sync FTPS dell'artefatto in `public_html` (mai `config/local.php` né `var/`), poi controlla che `/`, `/links/` e `/calendario.php` rispondano 200                                |
-| Release             | push su `main`, dopo i job sopra                           | semantic-release                                                                                                                                                                 |
+| Job                 | Quando                                                     | Cosa fa                                                                                                                                                                                                                                                                               |
+| ------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PHP 8.3 e 8.4       | ogni push su `develop` e `main`, ogni pull request         | `composer validate --strict`, dipendenze, `composer lint`, `composer analyse`, `composer test` (database SQLite in memoria)                                                                                                                                                           |
+| Database MariaDB    | come sopra                                                 | con un servizio MariaDB 10.11: `bin/console migrate` due volte (la seconda non deve fare nulla), poi i test del gruppo `database` su MariaDB                                                                                                                                          |
+| Front-end           | come sopra                                                 | `npm ci`, lint, formattazione, test, build                                                                                                                                                                                                                                            |
+| Messaggi di commit  | come sopra                                                 | commitlint sui commit del push o della pull request                                                                                                                                                                                                                                   |
+| Pacchetto di deploy | come sopra                                                 | `npm run assemble` con PHP 8.3, `npm run smoke` (anche area clienti e prenotazioni: 503 senza configurazione, poi un giro completo con una configurazione temporanea, dalla registrazione alla prenotazione con l'email e il file `.ics`, fino alla disdetta), artefatto `site-build` |
+| Deploy su Hostinger | push su `main` o avvio manuale su `main`, dopo i job sopra | sync FTPS dell'artefatto in `public_html` (mai `config/local.php` né `var/`), poi controlla che `/`, `/links/` e `/calendario.php` rispondano 200                                                                                                                                     |
+| Release             | push su `main`, dopo i job sopra                           | semantic-release                                                                                                                                                                                                                                                                      |
 
 Il deploy carica lo stesso pacchetto già provato dal job "Pacchetto di deploy". È incrementale: un file di stato sul server (`.ftp-deploy-sync-state.json`) ricorda cosa è stato caricato. Si caricano solo i file nuovi o cambiati e si cancellano solo quelli caricati dal deploy e poi tolti dal pacchetto. Il resto di `public_html` non si tocca e la cartella non viene mai svuotata.
 

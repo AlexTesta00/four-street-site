@@ -6,7 +6,8 @@ use FourStreet\Content\PendingContent;
 use FourStreet\View\Template;
 
 /**
- * Piè di pagina: marchio e indirizzo, contatti, lo shop (presto), i dati legali e il copyright.
+ * Piè di pagina: marchio e indirizzo (con l'area clienti, se il server la offre), contatti, lo shop (presto),
+ * i dati legali e il copyright.
  * Informativa privacy e dati della società, finché mancano, sono segnaposto; con i segnaposto spenti
  * non ci sono (e se mancano entrambi, nemmeno la loro riga).
  *
@@ -15,6 +16,7 @@ use FourStreet\View\Template;
  * @var string $address
  * @var string|null $instagram
  * @var string|null $whatsapp
+ * @var string|null $accountUrl
  * @var string $year anno corrente, "2026"
  */
 
@@ -35,6 +37,12 @@ $showsCompany = $content->shows($content->company);
       <div class="flex flex-col items-start gap-4">
         <a href="/" class="fs-bar__mark" aria-label="4Street, home">4Street</a>
         <p class="text-body-sm text-fg-muted"><?= $view->e($address) ?></p>
+<?php if ($accountUrl !== null): ?>
+        <a href="<?= $view->e($accountUrl) ?>" class="fs-btn fs-btn--ghost fs-btn--sm -ml-2">
+          <?= $view->icon('user') ?>
+          <span class="fs-btn__label">Area clienti</span>
+        </a>
+<?php endif; ?>
       </div>
       <nav aria-label="Contatti" class="flex flex-col items-start gap-1">
 <?php foreach ($contacts as $contact): ?>

@@ -25,7 +25,7 @@ final class TestDatabase
     public const string PASSWORD_VARIABLE = 'FOURSTREET_TEST_DATABASE_PASSWORD';
 
     /** Le tabelle da svuotare, prima quelle che dipendono dalle altre. */
-    private const array TABLES = ['rate_limits', 'account_tokens', 'sessions', 'users'];
+    private const array TABLES = ['bookings', 'rate_limits', 'account_tokens', 'sessions', 'users'];
 
     public static function create(?Clock $clock = null): Database
     {

@@ -1,0 +1,89 @@
+/* ---------- Le prenotazioni del cliente ----------
+   Un elenco di righe panel, dalla più vicina: a sinistra la data come nei calendari (fs-day__face),
+   poi orario e posto, a destra "Disdici" (oppure "In corso"). La riga in corso ha il filetto oro.
+   Sotto i 360px "Disdici" va sotto il posto: l'orario resta su una riga. */
+
+@layer components {
+  .fs-agenda {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .fs-agenda__item {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
+    grid-template-areas:
+      "date body"
+      "date action";
+    align-items: center;
+    column-gap: 16px;
+    min-height: 72px;
+    padding-right: 12px;
+    background: var(--color-panel);
+    border: 1px solid var(--color-hairline-strong);
+    box-shadow: var(--edge);
+  }
+  .fs-agenda__item--now {
+    border-color: var(--color-accent-line);
+  }
+  .fs-agenda__date {
+    grid-area: date;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: stretch;
+    padding: 8px 0;
+    border-right: 1px solid var(--color-hairline);
+  }
+  .fs-agenda__body {
+    grid-area: body;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding-top: 12px;
+  }
+  .fs-agenda__when {
+    color: var(--color-fg);
+    font-size: 16px;
+    line-height: 24px;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  .fs-agenda__meta {
+    color: var(--color-fg-muted);
+    font-size: 14px;
+    line-height: 20px;
+  }
+  /* Il bottone fantasma si allinea al testo: il suo margine interno sporge a sinistra */
+  .fs-agenda__action {
+    grid-area: action;
+    justify-self: start;
+    margin: 0 0 4px -8px;
+  }
+  .fs-agenda__action:is(.fs-tag, .fs-micro) {
+    margin: 8px 0 12px;
+  }
+
+  @media (min-width: 360px) {
+    .fs-agenda__item {
+      grid-template-columns: 56px minmax(0, 1fr) auto;
+      grid-template-areas: "date body action";
+    }
+    .fs-agenda__body {
+      padding: 12px 0;
+    }
+    .fs-agenda__action,
+    .fs-agenda__action:is(.fs-tag, .fs-micro) {
+      justify-self: end;
+      margin: 0;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .fs-agenda__item {
+      grid-template-columns: 64px minmax(0, 1fr) auto;
+      column-gap: 20px;
+      padding-right: 16px;
+    }
+  }
+}

@@ -145,6 +145,21 @@ final readonly class ConfigValues
         return array_key_exists($key, $this->values) ? $this->positiveInt($key) : $default;
     }
 
+    /**
+     * Numero intero fra due limiti, compresi: un valore fuori misura è quasi sempre un errore di battitura.
+     *
+     * @return ($min is positive-int ? positive-int : int)
+     */
+    public function intBetween(string $key, int $min, int $max): int
+    {
+        $value = $this->values[$key] ?? null;
+        if (!is_int($value) || $value < $min || $value > $max) {
+            throw $this->invalid($key, sprintf('deve essere un numero intero da %d a %d', $min, $max), is_int($value) ? (string) $value : $value);
+        }
+
+        return $value;
+    }
+
     public function optionalUrl(string $key): ?string
     {
         $value = $this->values[$key] ?? '';

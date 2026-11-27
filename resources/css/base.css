@@ -25,7 +25,9 @@
   a:focus-visible,
   button:focus-visible,
   summary:focus-visible {
-    outline: none;
+    /* Invisibile di solito; in Windows a contrasto elevato (forced colors) l'ombra sparisce e resta questo */
+    outline: 2px solid transparent;
+    outline-offset: 2px;
     box-shadow: var(--focus-ring);
   }
 }

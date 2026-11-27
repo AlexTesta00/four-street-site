@@ -33,6 +33,11 @@ final readonly class Row
         throw self::unexpected($column, 'un numero intero', $value);
     }
 
+    public function nullableInt(string $column): ?int
+    {
+        return $this->value($column) === null ? null : $this->int($column);
+    }
+
     public function string(string $column): string
     {
         $value = $this->value($column);

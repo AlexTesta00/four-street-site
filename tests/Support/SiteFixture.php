@@ -47,11 +47,52 @@ final class SiteFixture
                 'privacy_url' => '',
                 'company' => '',
             ],
-            'booking' => [
-                'capacity' => 5,
-                'example_slots' => ['07:00' => 2, '09:30' => 4, '12:30' => 1, '17:30' => 5, '18:30' => 3, '20:00' => 0],
-                'default_slot' => '18:30',
-            ],
+            'booking' => self::booking(),
+        ];
+    }
+
+    /**
+     * La sezione "booking", con le regole provvisorie di config/site.php.
+     *
+     * @param array<string, mixed> $overrides
+     *
+     * @return array<string, mixed>
+     */
+    public static function booking(array $overrides = []): array
+    {
+        return [
+            'online' => true,
+            'capacity' => 5,
+            'schedule' => self::week(),
+            'slot_minutes' => 60,
+            'days_ahead' => 14,
+            'closed_dates' => [],
+            'booking_closes_minutes_before' => 0,
+            'cancel_closes_minutes_before' => 0,
+            'max_upcoming' => 6,
+            'example_slots' => ['07:00' => 2, '09:30' => 4, '12:30' => 1, '17:30' => 5, '18:30' => 3, '20:00' => 0],
+            'default_slot' => '18:30',
+            ...$overrides,
+        ];
+    }
+
+    /**
+     * L'orario provvisorio della settimana: da lunedì a sabato sei fasce, domenica chiuso.
+     *
+     * @return array<string, list<string>>
+     */
+    public static function week(): array
+    {
+        $day = ['07:00', '09:30', '12:30', '17:30', '18:30', '20:00'];
+
+        return [
+            'lunedì' => $day,
+            'martedì' => $day,
+            'mercoledì' => $day,
+            'giovedì' => $day,
+            'venerdì' => $day,
+            'sabato' => $day,
+            'domenica' => [],
         ];
     }
 

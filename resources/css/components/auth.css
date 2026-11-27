@@ -66,6 +66,8 @@
     color: var(--color-fg-muted);
     font-size: 16px;
     line-height: 24px;
+    /* Un'email lunga va a capo invece di uscire dallo schermo */
+    overflow-wrap: anywhere;
   }
   .fs-auth__note-icon {
     width: 24px;

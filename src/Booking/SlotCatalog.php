@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace FourStreet\Booking;
 
 /**
- * Le fasce orarie da mostrare in pagina. Oggi sono esempi presi da config/site.php;
- * con le prenotazioni vere arriveranno da un catalogo che legge il database, senza cambiare i template.
+ * Le fasce di un giorno da scegliere con il gruppo di radio della landing: quelle di esempio
+ * di config/site.php (ExampleSlotCatalog) oppure quelle vere, con i posti del database (LivePreview).
  */
 interface SlotCatalog
 {
@@ -18,12 +18,13 @@ interface SlotCatalog
     public function capacity(): int;
 
     /**
-     * @return non-empty-list<Slot> nell'ordine in cui compaiono
+     * @return list<Slot> nell'ordine in cui compaiono
      */
     public function slots(): array;
 
     /**
-     * La fascia scelta all'apertura della pagina: una di slots(), mai piena.
+     * La fascia scelta all'apertura della pagina: una di slots() che si può prenotare,
+     * oppure null se sono tutte piene o chiuse.
      */
-    public function defaultSlot(): Slot;
+    public function defaultSlot(): ?Slot;
 }

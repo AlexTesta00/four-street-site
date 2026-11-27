@@ -7,6 +7,7 @@ namespace FourStreet\Account;
 use FourStreet\Account\Http\AccountController;
 use FourStreet\Account\Http\AccountPages;
 use FourStreet\Account\Http\CheckEmailController;
+use FourStreet\Account\Http\DashboardSection;
 use FourStreet\Account\Http\ForgotPasswordController;
 use FourStreet\Account\Http\LoginController;
 use FourStreet\Account\Http\LogoutController;
@@ -77,6 +78,7 @@ final readonly class AccountModule implements RouteProvider
     /**
      * @param Outbox $outbox le email che partono dopo la risposta (Application la svuota)
      * @param Controller $formExpired la pagina dei moduli respinti dalla protezione CSRF
+     * @param list<DashboardSection> $dashboardSections le sezioni di altri moduli nella pagina dell'account (le prenotazioni)
      */
     public static function create(
         Backend $backend,
@@ -86,6 +88,7 @@ final readonly class AccountModule implements RouteProvider
         ExceptionReporter $reporter,
         Outbox $outbox,
         Controller $formExpired,
+        array $dashboardSections = [],
     ): self {
         $database = $backend->database;
         $users = new PdoUserRepository($database);
@@ -125,7 +128,7 @@ final readonly class AccountModule implements RouteProvider
         $signup = new SignupBrowser($cookies);
 
         $endpoints = [
-            AccountUrls::HOME => [new AccountController($pages, $site, $dates), $guards->member()],
+            AccountUrls::HOME => [new AccountController($pages, $site, $dates, $dashboardSections), $guards->member()],
             AccountUrls::REGISTER => [new RegisterController($pages, $registration, $policy, $signup), $guards->page()],
             AccountUrls::REGISTER_SENT => [new CheckEmailController($pages, TokenPurpose::EmailVerification), $guards->page()],
             AccountUrls::VERIFY => [new VerifyEmailController($pages, $verification, $sessions, $signup), $guards->tokenPage()],

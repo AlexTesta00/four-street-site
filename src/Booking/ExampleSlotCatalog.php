@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace FourStreet\Booking;
 
+use FourStreet\Booking\Landing\SlotPreview;
 use FourStreet\Config\ConfigValues;
 use InvalidArgumentException;
 
 /**
- * Le fasce di esempio di config/site.php (sezione "booking"): mostrano come funzionerà la prenotazione.
+ * Le fasce di esempio di config/site.php (sezione "booking"): mostrano come funziona la prenotazione
+ * finché le prenotazioni vere non sono attive (booking.online, oppure il server senza database).
  */
-final readonly class ExampleSlotCatalog implements SlotCatalog
+final readonly class ExampleSlotCatalog implements SlotCatalog, SlotPreview
 {
-    private const array KEYS = ['capacity', 'example_slots', 'default_slot'];
-
     private Slot $default;
 
     /**
@@ -39,12 +39,13 @@ final readonly class ExampleSlotCatalog implements SlotCatalog
     }
 
     /**
-     * ['capacity' => 5, 'example_slots' => ['18:30' => 3, …], 'default_slot' => '18:30'].
+     * Le chiavi "example_slots" e "default_slot" della sezione booking, con la capienza già letta:
+     * ['example_slots' => ['18:30' => 3, …], 'default_slot' => '18:30'].
+     *
+     * @param positive-int $capacity
      */
-    public static function fromConfig(ConfigValues $booking): self
+    public static function fromConfig(ConfigValues $booking, int $capacity): self
     {
-        $booking->assertKnownKeys(self::KEYS);
-        $capacity = $booking->positiveInt('capacity');
         $slots = self::exampleSlots($booking, $capacity);
 
         $defaultTime = $booking->text('default_slot');
@@ -66,6 +67,7 @@ final readonly class ExampleSlotCatalog implements SlotCatalog
         return $this->slots;
     }
 
+    /** Una fascia di esempio c'è sempre: la configurazione la vuole non piena. */
     public function defaultSlot(): Slot
     {
         return $this->default;
@@ -96,7 +98,7 @@ final readonly class ExampleSlotCatalog implements SlotCatalog
                     is_int($taken) ? (string) $taken : $taken,
                 );
             }
-            $slots[] = new Slot($time, $capacity, $taken);
+            $slots[] = Slot::example($time, $capacity, $taken);
         }
 
         return $slots;

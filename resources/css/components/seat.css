@@ -22,6 +22,11 @@
     background: var(--color-fg-muted);
     border-color: var(--color-fg-muted);
   }
+  /* Il posto del cliente: oro, come il posto scelto nella landing */
+  .fs-seat--mine {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+  }
 
   /* In apertura: fino a 44px per lato, più piccoli solo se lo schermo non basta */
   .fs-seats--lg {

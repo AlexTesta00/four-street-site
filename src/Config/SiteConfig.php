@@ -6,7 +6,7 @@ namespace FourStreet\Config;
 
 use DateTimeImmutable;
 use DateTimeZone;
-use FourStreet\Booking\ExampleSlotCatalog;
+use FourStreet\Booking\BookingRules;
 use FourStreet\Content\PendingContent;
 
 /**
@@ -44,7 +44,7 @@ final readonly class SiteConfig
         public array $links,
         public ?string $siteUrl,
         public PendingContent $content,
-        public ExampleSlotCatalog $booking,
+        public BookingRules $booking,
     ) {}
 
     public static function fromFile(string $path): self
@@ -82,7 +82,7 @@ final readonly class SiteConfig
             links: self::links($config),
             siteUrl: $siteUrl === null ? null : rtrim($siteUrl, '/'),
             content: PendingContent::fromConfig($config->section('content'), $config->flag('show_placeholders')),
-            booking: ExampleSlotCatalog::fromConfig($config->requiredSection('booking')),
+            booking: BookingRules::fromConfig($config->requiredSection('booking')),
         );
     }
 

@@ -67,10 +67,20 @@ final readonly class IcsCalendar
             $lines[] = 'DTEND;VALUE=DATE:' . $event->start->modify('+1 day')->format(self::DATE_FORMAT);
         } else {
             $lines[] = 'DTSTART:' . self::utc($event->start);
+            if ($event->end !== null) {
+                $lines[] = 'DTEND:' . self::utc($event->end);
+            }
         }
 
         $lines[] = 'SUMMARY:' . IcsText::escape($event->summary);
         $lines[] = 'LOCATION:' . IcsText::escape($event->location);
+        if ($event->description !== null) {
+            $lines[] = 'DESCRIPTION:' . IcsText::escape($event->description);
+        }
+        if ($event->url !== null) {
+            // URL è di tipo URI, non TEXT: niente escape (IcsEvent lo vuole già pulito).
+            $lines[] = 'URL:' . $event->url;
+        }
         $lines[] = 'END:VEVENT';
 
         return $lines;

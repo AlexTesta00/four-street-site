@@ -32,13 +32,18 @@ final class InMemoryMailer implements Mailer
     }
 
     /**
+     * @param string|null $subject solo quelli con l'oggetto che comincia così
+     *
      * @return list<Message> i messaggi mandati a quell'indirizzo, in ordine
      *
      * @phpstan-impure
      */
-    public function sentTo(string $email): array
+    public function sentTo(string $email, ?string $subject = null): array
     {
-        return array_values(array_filter($this->sent, static fn(Message $message): bool => $message->to->email === $email));
+        return array_values(array_filter(
+            $this->sent,
+            static fn(Message $message): bool => $message->to->email === $email && ($subject === null || str_starts_with($message->subject, $subject)),
+        ));
     }
 
     /**

@@ -59,11 +59,39 @@ return [
         'company' => '',
     ],
 
-    // Prenotazione per fasce orarie. Per ora la pagina mostra solo come funzionerà, con fasce di esempio.
+    // Prenotazione per fasce orarie. Le regole qui sotto sono provvisorie: vanno confermate con il titolare.
+    // Orari e giorni sono ora di San Marino (timezone qui sopra).
     'booking' => [
+        // true: si prenota dal sito (serve anche config/local.php sul server, con database e posta).
+        // false: la landing mostra le fasce di esempio e /prenota/ risponde "Prenotazioni presto";
+        // chi ha già una prenotazione la vede e la può disdire dal suo account.
+        'online' => true,
         // Posti per fascia oraria: tutti i numeri della pagina partono da qui.
         'capacity' => 5,
-        // Fasce di esempio: orario (HH:MM) => posti già presi, da 0 a capacity.
+        // L'orario della settimana: per ogni giorno gli orari d'inizio delle fasce (HH:MM, a 24 ore).
+        // Un giorno chiuso ha []. Le fasce di uno stesso giorno non si sovrappongono e finiscono entro mezzanotte.
+        'schedule' => [
+            'lunedì' => ['07:00', '09:30', '12:30', '17:30', '18:30', '20:00'],
+            'martedì' => ['07:00', '09:30', '12:30', '17:30', '18:30', '20:00'],
+            'mercoledì' => ['07:00', '09:30', '12:30', '17:30', '18:30', '20:00'],
+            'giovedì' => ['07:00', '09:30', '12:30', '17:30', '18:30', '20:00'],
+            'venerdì' => ['07:00', '09:30', '12:30', '17:30', '18:30', '20:00'],
+            'sabato' => ['07:00', '09:30', '12:30', '17:30', '18:30', '20:00'],
+            'domenica' => [],
+        ],
+        // Quanto dura una fascia, in minuti (serve anche all'evento del calendario nell'email).
+        'slot_minutes' => 60,
+        // Si prenota da oggi fino a questi giorni dopo oggi (0: solo oggi). Mai prima dell'inaugurazione:
+        // il primo giorno prenotabile è quello dell'apertura, dalle fasce che iniziano dall'ora d'apertura in poi.
+        'days_ahead' => 14,
+        // Giorni di chiusura, senza fasce, nel formato AAAA-MM-GG: ['2026-12-25', '2027-01-01'].
+        'closed_dates' => [],
+        // Fino a quanti minuti prima dell'inizio si prenota e si disdice (0: fino all'inizio della fascia).
+        'booking_closes_minutes_before' => 0,
+        'cancel_closes_minutes_before' => 0,
+        // Prenotazioni future attive per cliente, al massimo (una al giorno, sempre).
+        'max_upcoming' => 6,
+        // Fasce di esempio, per quando le prenotazioni non sono attive: orario (HH:MM) => posti già presi, da 0 a capacity.
         'example_slots' => [
             '07:00' => 2,
             '09:30' => 4,
@@ -72,7 +100,7 @@ return [
             '18:30' => 3,
             '20:00' => 0,
         ],
-        // La fascia scelta quando si apre la pagina: una delle fasce qui sopra, non piena.
+        // La fascia di esempio scelta quando si apre la pagina: una delle fasce qui sopra, non piena.
         'default_slot' => '18:30',
     ],
 ];

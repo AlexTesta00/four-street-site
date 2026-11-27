@@ -37,4 +37,14 @@ final class MovableClock implements Clock
     {
         $this->now = $this->now->modify($modifier);
     }
+
+    /**
+     * Porta l'orologio a un'ora precisa, nel fuso in cui è stato creato.
+     *
+     * @param string $time "2026-12-07 07:30:00"
+     */
+    public function moveTo(string $time): void
+    {
+        $this->now = new DateTimeImmutable($time, $this->now->getTimezone());
+    }
 }

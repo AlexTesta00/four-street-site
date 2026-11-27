@@ -2,12 +2,16 @@
 // con build/index.php come router. Due giri:
 //
 // 1. Senza configurazione locale, come un server appena caricato: codici di stato, tipi di contenuto
-//    e alcuni testi delle pagine principali, l'area clienti che risponde 503 ("non ancora attiva"),
-//    poi la forma del pacchetto (vendor senza dev, _app/ protetta, niente config/local.php né var/).
+//    e alcuni testi delle pagine principali, l'area clienti e le prenotazioni che rispondono 503
+//    ("non ancora attiva", "Prenotazioni presto"), poi la forma del pacchetto (vendor senza dev,
+//    _app/ protetta, niente config/local.php né var/).
 // 2. Con una configurazione locale temporanea fuori da build/ (SQLite e posta in file .eml in una
 //    cartella temporanea), indicata con FOURSTREET_LOCAL_CONFIG: migrazioni con la console del
 //    pacchetto, registrazione, link letto dall'email (da un altro browser chiede la password),
 //    conferma, pagina dell'account, password dimenticata con l'email mandata dopo la risposta.
+//    Poi, se booking.online è true in config/site.php del pacchetto, la prenotazione di una fascia:
+//    landing con le fasce vere, scelta, riepilogo, conferma, email con l'evento .ics, prenotazione
+//    nell'account, disdetta e la sua email. Con booking.online a false controlla "Prenotazioni presto".
 //
 // Alla fine build/ deve essere identica a com'era: è l'artefatto che va in produzione.
 //
@@ -87,9 +91,22 @@ const REQUESTS = [
   { path: '/pagina-che-non-esiste', status: 404, type: 'text/html' },
   { path: '/_app/composer.json', status: 404 },
   { path: '/_app/bin/console', status: 404 },
-  // L'area clienti senza config/local.php: una pagina cortese, mai un errore.
+  // L'area clienti e le prenotazioni senza config/local.php: una pagina cortese, mai un errore.
   { path: '/account/accedi/', status: 503, type: 'text/html', body: ['Arriva presto.'] },
   { path: '/account/', status: 503, type: 'text/html', body: ['Arriva presto.'] },
+  { path: '/prenota/', status: 503, type: 'text/html', body: ['Prenotazioni presto.'] },
+  {
+    path: '/prenota/conferma/?giorno=2026-12-07&fascia=18%3A30',
+    status: 503,
+    type: 'text/html',
+    body: ['Prenotazioni presto.'],
+  },
+  {
+    path: '/account/prenotazioni/1/disdici/',
+    status: 503,
+    type: 'text/html',
+    body: ['Arriva presto.'],
+  },
 ];
 
 /** Forma del pacchetto: cosa deve esserci e cosa non deve mai arrivare sul server. */
@@ -100,6 +117,7 @@ const REQUIRED_FILES = [
   '_app/bin/console',
   '_app/config/local.example.php',
   '_app/database/migrations/0001_create_users.php',
+  '_app/database/migrations/0005_create_bookings.php',
 ];
 const FORBIDDEN_PATHS = [
   '.env',
@@ -287,6 +305,140 @@ function readEmail(mailDir, name) {
   return decodeQuotedPrintable(readFileSync(join(mailDir, name), 'utf8'));
 }
 
+/** Un'email così com'è: gli allegati in base64 non si toccano. */
+function readRawEmail(mailDir, name) {
+  return readFileSync(join(mailDir, name), 'utf8');
+}
+
+/** L'evento .ics allegato a un'email (base64), decodificato; vuoto se non c'è. */
+function calendarAttachment(raw) {
+  const part = raw.match(
+    /filename=prenotazione-4street\.ics\r?\n\r?\n([A-Za-z0-9+/=\r\n]+?)\r?\n--/,
+  )?.[1];
+  return part ? Buffer.from(part.replace(/\s+/g, ''), 'base64').toString('utf8') : '';
+}
+
+/** booking.online di config/site.php nel pacchetto, letto con PHP. */
+function bookingsOnline() {
+  const result = spawnSync(
+    php,
+    [
+      '-r',
+      'echo json_encode((require $argv[1])["booking"]["online"] ?? null);',
+      join(buildDir, '_app/config/site.php'),
+    ],
+    { encoding: 'utf8' },
+  );
+  return result.status === 0 && result.stdout.trim() === 'true';
+}
+
+/**
+ * La prenotazione di una fascia con il browser che ha appena fatto l'accesso: landing, scelta,
+ * riepilogo, conferma, email con l'evento, account, disdetta ed email della disdetta.
+ */
+async function checkBookingJourney(browser, mailDir) {
+  if (!bookingsOnline()) {
+    const soon = await browser.get('/prenota/');
+    check(
+      soon.status === 503 && (await soon.text()).includes('Prenotazioni presto.'),
+      `con booking.online a false /prenota/ risponde "Prenotazioni presto" (${soon.status})`,
+    );
+    console.log('     booking.online è false in config/site.php: la prenotazione non si prova.');
+    return;
+  }
+
+  const home = await browser.get('/');
+  const homePage = await home.text();
+  check(
+    home.status === 200 && homePage.includes('<form method="get" action="/prenota/conferma/"'),
+    'la landing ha le fasce vere, con il modulo verso il riepilogo',
+  );
+  check(
+    home.headers.get('cache-control') === 'no-cache',
+    'la landing con i posti veri non va in cache',
+  );
+  check(home.headers.getSetCookie().length === 0, 'la landing non dà cookie');
+
+  const day = await browser.get('/prenota/');
+  const dayPage = await day.text();
+  const slotLink = dayPage
+    .match(/href="(\/prenota\/conferma\/\?giorno=\d{4}-\d{2}-\d{2}&amp;fascia=\d{2}%3A\d{2})"/)?.[1]
+    ?.replaceAll('&amp;', '&');
+  check(
+    day.status === 200 && slotLink !== undefined,
+    `GET /prenota/ ha una fascia da scegliere (${day.status})`,
+  );
+  if (slotLink === undefined) return;
+
+  const summary = await browser.get(slotLink);
+  const summaryPage = await summary.text();
+  const giorno = summaryPage.match(/name="giorno" value="(\d{4}-\d{2}-\d{2})"/)?.[1];
+  const fascia = summaryPage.match(/name="fascia" value="(\d{2}:\d{2})"/)?.[1];
+  check(
+    summary.status === 200 && giorno !== undefined && fascia !== undefined,
+    `il riepilogo ${slotLink} ha il modulo di conferma (${summary.status})`,
+  );
+
+  const before = emailFiles(mailDir).length;
+  const booked = await browser.post('/prenota/conferma/', {
+    csrf: browser.cookies.get('csrf') ?? '',
+    giorno: giorno ?? '',
+    fascia: fascia ?? '',
+  });
+  await booked.text();
+  check(
+    booked.status === 303 &&
+      booked.headers.get('location') === '/account/?avviso=prenotazione-confermata&prenotazione=1',
+    `POST /prenota/conferma/ prenota e porta all'account (${booked.status} ${booked.headers.get('location')})`,
+  );
+
+  const afterBooking = emailFiles(mailDir);
+  const confirmation =
+    afterBooking.length === before + 1 ? readRawEmail(mailDir, afterBooking.at(-1)) : '';
+  check(
+    confirmation.includes('Subject: Prenotazione confermata'),
+    `parte subito l'email di conferma (email: ${afterBooking.length})`,
+  );
+  const ics = calendarAttachment(confirmation);
+  check(
+    ics.includes('BEGIN:VEVENT') &&
+      ics.includes('UID:prenotazione-1@') &&
+      /DTSTART:\d{8}T\d{6}Z/.test(ics) &&
+      /DTEND:\d{8}T\d{6}Z/.test(ics),
+    "l'email ha in allegato l'evento .ics della prenotazione",
+  );
+
+  const account = await browser.get('/account/?avviso=prenotazione-confermata&prenotazione=1');
+  const accountPage = await account.text();
+  check(
+    account.status === 200 &&
+      accountPage.includes('Prenotazione confermata') &&
+      accountPage.includes('href="/account/prenotazioni/1/disdici/"'),
+    "l'account mostra la prenotazione, con Disdici",
+  );
+
+  const cancelPage = await browser.get('/account/prenotazioni/1/disdici/');
+  await cancelPage.text();
+  check(cancelPage.status === 200, `GET della disdetta chiede conferma (${cancelPage.status})`);
+  const cancelled = await browser.post('/account/prenotazioni/1/disdici/', {
+    csrf: browser.cookies.get('csrf') ?? '',
+  });
+  await cancelled.text();
+  check(
+    cancelled.status === 303 &&
+      cancelled.headers.get('location') === '/account/?avviso=prenotazione-disdetta&prenotazione=1',
+    `POST della disdetta disdice e porta all'account (${cancelled.status})`,
+  );
+  const afterCancel = emailFiles(mailDir);
+  const cancellation =
+    afterCancel.length === afterBooking.length + 1 ? readRawEmail(mailDir, afterCancel.at(-1)) : '';
+  check(
+    cancellation.includes('Subject: Prenotazione disdetta') &&
+      !cancellation.includes('text/calendar'),
+    "parte l'email della disdetta, senza allegato",
+  );
+}
+
 /** La console del pacchetto, con la configurazione locale indicata ("--": gli argomenti sono della console). */
 function runConsole(localConfig, args) {
   return spawnSync(php, ['-f', join(buildDir, '_app/bin/console'), '--', ...args], {
@@ -328,7 +480,7 @@ async function checkAccountJourney(temporary) {
 
   const migrate = runConsole(localConfig, ['migrate']);
   check(
-    migrate.status === 0 && migrate.stdout.includes('Database aggiornato: 4 migrazioni applicate.'),
+    migrate.status === 0 && migrate.stdout.includes('Database aggiornato: 5 migrazioni applicate.'),
     `bin/console migrate applica le migrazioni (uscita ${migrate.status})`,
   );
   if (migrate.status !== 0) console.error(migrate.stdout, migrate.stderr);
@@ -430,6 +582,9 @@ async function checkAccountJourney(temporary) {
         readEmail(mailDir, afterRequest[1]).includes('Subject: Scegli una nuova password'),
       `dopo la risposta parte l'email della nuova password (email: ${afterRequest.length})`,
     );
+
+    // La prenotazione di una fascia, con il browser che ha fatto l'accesso.
+    await checkBookingJourney(browser, mailDir);
   } finally {
     await stopServer(server);
   }

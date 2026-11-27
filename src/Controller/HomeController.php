@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace FourStreet\Controller;
 
-use FourStreet\Booking\SlotCatalog;
+use FourStreet\Booking\Landing\SlotPreviewSource;
 use FourStreet\Clock\Clock;
 use FourStreet\Config\SiteConfig;
 use FourStreet\Http\Controller;
@@ -20,16 +20,23 @@ use FourStreet\View\View;
 /**
  * Home: la landing di 4Street. Prima dell'inaugurazione ha il countdown; dal giorno dell'apertura
  * passa allo stato "aperti" (allo zero lo script fa lo stesso passaggio senza ricaricare la pagina).
+ * La sezione delle fasce viene da $slots: con le prenotazioni attive mostra i posti veri, e allora
+ * la pagina non va in cache (Cache-Control: no-cache, il browser la richiede ogni volta).
+ * Non legge mai la sessione: è uguale per tutti.
  */
 final readonly class HomeController implements Controller
 {
+    /**
+     * @param string|null $accountUrl l'area clienti, se il server la offre: un link fisso, uguale per tutti
+     */
     public function __construct(
         private View $view,
         private SiteConfig $site,
         private Clock $clock,
         private ItalianDateFormatter $dates,
         private MapLinks $maps,
-        private SlotCatalog $slots,
+        private SlotPreviewSource $slots,
+        private ?string $accountUrl = null,
     ) {}
 
     public function __invoke(Request $request): Response
@@ -38,11 +45,12 @@ final readonly class HomeController implements Controller
         $now = $this->clock->now();
         $preview = Preview::fromQuery($request->queryParam('anteprima'));
 
-        return Response::html($this->view->render('pages/home', [
+        $response = Response::html($this->view->render('pages/home', [
             'site' => $this->site,
             'schedule' => new OpeningSchedule($opening, $now, $preview),
             'maps' => $this->maps,
-            'slots' => $this->slots,
+            'slots' => $this->slots->preview(),
+            'accountUrl' => $this->accountUrl,
             'content' => $this->site->content,
             'structuredData' => GymStructuredData::fromSite($this->site)->script(),
             'dateLong' => $this->dates->format($opening),
@@ -51,5 +59,8 @@ final readonly class HomeController implements Controller
             'dateTag' => $opening->format('d.m.Y'),
             'year' => $now->format('Y'),
         ]));
+
+        // I posti cambiano a ogni prenotazione: una copia in cache mostrerebbe numeri vecchi.
+        return $this->slots->isLive() ? $response->withHeader('Cache-Control', 'no-cache') : $response;
     }
 }

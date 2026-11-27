@@ -36,6 +36,7 @@ final class SchemaTest extends TestCase
         '0002_create_sessions',
         '0003_create_account_tokens',
         '0004_create_rate_limits',
+        '0005_create_bookings',
     ];
 
     private Database $database;
@@ -78,6 +79,20 @@ final class SchemaTest extends TestCase
         yield 'email ripetuta' => ['users', $user];
         yield 'nome mancante' => ['users', [...$user, 'email' => 'c@example.com', 'full_name' => null]];
         yield 'scopo sconosciuto del link' => ['account_tokens', ['token_hash' => str_repeat('a', 64), 'user_id' => 0, 'purpose' => 'magic_link', 'created_at' => '2026-11-25 07:00:00', 'expires_at' => '2026-11-27 07:00:00']];
+
+        $booking = ['user_id' => 0, 'slot_date' => '2026-12-07', 'slot_time' => '18:30', 'starts_at' => '2026-12-07 17:30:00', 'seat' => 1, 'active' => 1, 'created_at' => '2026-11-25 07:00:00'];
+        $cancelled = ['seat' => null, 'active' => null, 'cancelled_at' => '2026-11-25 08:00:00', 'cancelled_by' => 'customer'];
+        yield 'posto zero' => ['bookings', [...$booking, 'seat' => 0]];
+        yield 'attiva vale solo 1' => ['bookings', [...$booking, 'active' => 2]];
+        yield 'attiva senza posto' => ['bookings', [...$booking, 'seat' => null]];
+        yield 'attiva con la disdetta' => ['bookings', [...$booking, 'cancelled_at' => '2026-11-25 08:00:00', 'cancelled_by' => 'customer']];
+        yield 'disdetta con il posto' => ['bookings', [...$booking, ...$cancelled, 'seat' => 1]];
+        yield 'disdetta senza quando' => ['bookings', [...$booking, ...$cancelled, 'cancelled_at' => null]];
+        yield 'disdetta senza chi' => ['bookings', [...$booking, ...$cancelled, 'cancelled_by' => null]];
+        yield 'disdetta da uno sconosciuto' => ['bookings', [...$booking, ...$cancelled, 'cancelled_by' => 'robot']];
+        yield 'posto senza active né disdetta' => ['bookings', [...$booking, 'active' => null]];
+        yield 'giorno mancante' => ['bookings', [...$booking, 'slot_date' => null]];
+        yield 'cliente inesistente' => ['bookings', [...$booking, 'user_id' => 999_999]];
     }
 
     /**
@@ -87,7 +102,8 @@ final class SchemaTest extends TestCase
     public function testTheSchemaRefusesInvalidRows(string $table, array $row): void
     {
         $this->insert('users', ['full_name' => 'A', 'email' => 'a@example.com', 'password_hash' => 'h', 'privacy_accepted_at' => '2026-11-25 07:00:00', 'role' => 'customer', 'created_at' => '2026-11-25 07:00:00', 'updated_at' => '2026-11-25 07:00:00']);
-        if ($table === 'account_tokens') {
+        // user_id 0 vale "l'utente appena creato": la riga è sbagliata per altro.
+        if (($row['user_id'] ?? null) === 0) {
             $row['user_id'] = $this->database->lastInsertId();
         }
 

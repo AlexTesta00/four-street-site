@@ -18,6 +18,9 @@ use Throwable;
  */
 final class Database
 {
+    /** Quanto aspettare un server MySQL che non risponde, prima di rinunciare. */
+    private const int CONNECT_TIMEOUT_SECONDS = 5;
+
     private ?PDO $connection = null;
 
     public function __construct(
@@ -152,6 +155,9 @@ final class Database
         ];
         if ($this->config->driver === Driver::MySql) {
             $options[PDO::ATTR_EMULATE_PREPARES] = false;
+            // Un server che non risponde non tiene ferma la pagina: la connessione rinuncia dopo pochi secondi
+            // (la home lo legge per i posti delle fasce, e ripiega sugli orari senza numeri).
+            $options[PDO::ATTR_TIMEOUT] = self::CONNECT_TIMEOUT_SECONDS;
         }
 
         $connection = new PDO($this->config->dsn, $this->config->username, $this->config->password, $options);

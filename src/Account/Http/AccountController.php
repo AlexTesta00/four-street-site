@@ -12,17 +12,22 @@ use FourStreet\Http\Request;
 use FourStreet\Http\Response;
 use FourStreet\Security\Csrf\CsrfToken;
 use FourStreet\Text\ItalianDateFormatter;
+use FourStreet\View\Html;
 
 /**
- * /account/: la pagina dell'account, solo dopo l'accesso. Saluto, dati dell'account, uscita
- * e lo spazio delle prenotazioni (vuoto finché la prenotazione dal sito non c'è).
+ * /account/: la pagina dell'account, solo dopo l'accesso. Saluto, le sezioni degli altri moduli
+ * (le prenotazioni), i dati dell'account e l'uscita.
  */
 final readonly class AccountController implements Controller
 {
+    /**
+     * @param list<DashboardSection> $sections nell'ordine in cui compaiono, prima dei dati dell'account
+     */
     public function __construct(
         private AccountPages $pages,
         private SiteConfig $site,
         private ItalianDateFormatter $dates,
+        private array $sections = [],
     ) {}
 
     public function __invoke(Request $request): Response
@@ -34,6 +39,7 @@ final readonly class AccountController implements Controller
             'user' => $user,
             'createdOn' => $this->dates->format($user->createdAt->setTimezone($this->site->timezone)),
             'alert' => Notice::fromRequest($request)?->alert(),
+            'sections' => array_map(static fn(DashboardSection $section): Html => $section->render($request, $user), $this->sections),
         ]);
     }
 }

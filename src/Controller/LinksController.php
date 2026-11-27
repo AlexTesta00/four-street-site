@@ -16,16 +16,20 @@ use FourStreet\Text\ItalianDateFormatter;
 use FourStreet\View\View;
 
 /**
- * Pagina /links/: tutti i link di 4Street, con l'inaugurazione in evidenza.
+ * Pagina /links/: tutti i link di 4Street, con l'inaugurazione in evidenza. Non legge mai il database.
  */
 final readonly class LinksController implements Controller
 {
+    /**
+     * @param string|null $bookingUrl la pagina delle prenotazioni, se sono attive; altrimenti la voce dice "Presto"
+     */
     public function __construct(
         private View $view,
         private SiteConfig $site,
         private Clock $clock,
         private ItalianDateFormatter $dates,
         private MapLinks $maps,
+        private ?string $bookingUrl = null,
     ) {}
 
     public function __invoke(Request $request): Response
@@ -38,6 +42,7 @@ final readonly class LinksController implements Controller
             'schedule' => new OpeningSchedule($opening, $this->clock->now(), $preview),
             'maps' => $this->maps,
             'dateLong' => $this->dates->format($opening),
+            'bookingUrl' => $this->bookingUrl,
         ]));
     }
 }

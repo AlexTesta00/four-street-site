@@ -43,8 +43,10 @@
 @import "./components/actionbar.css";
 @import "./components/reveal.css";
 
-/* Pagine dell'area clienti */
+/* Pagine dell'area clienti e delle prenotazioni */
 @import "./components/auth.css";
+@import "./components/day.css";
+@import "./components/agenda.css";
 
 @import "./motion.css";
 @import "./reduced-motion.css";

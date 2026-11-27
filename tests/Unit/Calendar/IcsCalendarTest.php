@@ -9,6 +9,7 @@ use DateTimeZone;
 use FourStreet\Calendar\IcsCalendar;
 use FourStreet\Calendar\IcsEvent;
 use FourStreet\Calendar\IcsText;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -94,6 +95,53 @@ final class IcsCalendarTest extends TestCase
         }
         $unfolded = str_replace("\r\n ", '', $ics);
         self::assertStringContainsString('LOCATION:Strada ' . str_repeat('Lunghissima ', 10) . '1\; San Marino' . "\r\n", $unfolded);
+    }
+
+    public function testAnEventWithItsEndDescriptionAndPage(): void
+    {
+        $event = new IcsEvent(
+            uid: 'prenotazione-42@fourstreet.studio',
+            summary: 'Allenamento a 4Street',
+            location: 'Via del Bando 22, San Marino',
+            start: self::rome('2026-12-07 18:30'),
+            allDay: false,
+            stamp: self::rome('2026-11-25 08:00'),
+            end: self::rome('2026-12-07 19:30'),
+            description: 'Posto 3 di 5. Per disdire: https://fourstreet.studio/account/',
+            url: 'https://fourstreet.studio/account/',
+        );
+        $ics = (new IcsCalendar('-//4Street//Prenotazione//IT'))->withEvent($event)->render();
+
+        self::assertStringContainsString(
+            "BEGIN:VEVENT\r\n"
+            . "UID:prenotazione-42@fourstreet.studio\r\n"
+            . "DTSTAMP:20261125T070000Z\r\n"
+            . "DTSTART:20261207T173000Z\r\n"
+            . "DTEND:20261207T183000Z\r\n"
+            . "SUMMARY:Allenamento a 4Street\r\n"
+            . "LOCATION:Via del Bando 22\\, San Marino\r\n"
+            . "DESCRIPTION:Posto 3 di 5. Per disdire: https://fourstreet.studio/account/\r\n"
+            . "URL:https://fourstreet.studio/account/\r\n"
+            . "END:VEVENT\r\n",
+            $ics,
+        );
+    }
+
+    public function testAnEventEndsAfterItStartsAndLinksOnlyToWebPages(): void
+    {
+        foreach ([
+            static fn(): IcsEvent => new IcsEvent('a', 'b', 'c', self::rome('2026-12-07 18:30'), false, self::rome('2026-11-25 08:00'), end: self::rome('2026-12-07 18:30')),
+            static fn(): IcsEvent => new IcsEvent('a', 'b', 'c', self::rome('2026-12-07 18:30'), true, self::rome('2026-11-25 08:00'), end: self::rome('2026-12-07 19:30')),
+            static fn(): IcsEvent => new IcsEvent('a', 'b', 'c', self::rome('2026-12-07 18:30'), false, self::rome('2026-11-25 08:00'), url: 'javascript:alert(1)'),
+            static fn(): IcsEvent => new IcsEvent('a', 'b', 'c', self::rome('2026-12-07 18:30'), false, self::rome('2026-11-25 08:00'), url: "https://fourstreet.studio/\r\nX-EVIL:1"),
+        ] as $invalid) {
+            try {
+                $invalid();
+                self::fail('L\'evento doveva essere rifiutato.');
+            } catch (InvalidArgumentException $error) {
+                self::assertNotSame('', $error->getMessage());
+            }
+        }
     }
 
     public function testSeveralEventsAndImmutability(): void

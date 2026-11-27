@@ -20,9 +20,12 @@ use FourStreet\View\Template;
  * @var string $eyebrow occhiello sopra il titolo, "Area clienti"
  * @var Html|string $heading titolo della pagina (h1)
  * @var Html|string|null $lead la frase sotto il titolo
+ * @var bool|null $compact facoltativo: su mobile niente striscia del logo, così fasce e bottone di conferma
+ *                         stanno nel primo schermo (le pagine delle prenotazioni); da lg il logo resta
  */
 
 $pending = $site->content;
+$logoClass = ($compact ?? false) ? 'fs-auth__logo hidden lg:block' : 'fs-auth__logo';
 ?>
 <!doctype html>
 <html lang="it">
@@ -47,7 +50,7 @@ $pending = $site->content;
 
 <main id="contenuto" class="fs-auth">
   <div class="fs-auth__inner">
-    <?= $view->partial('partials/logo', ['figureClass' => 'fs-auth__logo', 'imageClass' => '', 'priority' => true]) ?>
+    <?= $view->partial('partials/logo', ['figureClass' => $logoClass, 'imageClass' => '', 'priority' => true]) ?>
 
     <div class="fs-auth__body">
       <div class="fs-auth__head">

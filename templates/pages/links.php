@@ -15,6 +15,7 @@ use FourStreet\View\Template;
  * @var OpeningSchedule $schedule
  * @var MapLinks $maps
  * @var string $dateLong "Domenica 6 dicembre 2026"
+ * @var string|null $bookingUrl la pagina delle prenotazioni, se sono attive; altrimenti la voce dice "Presto"
  */
 
 $view->layout('layouts/base', [
@@ -47,7 +48,7 @@ if ($whatsapp !== null) {
     $cards[] = ['icon' => 'whatsapp', 'title' => 'WhatsApp', 'meta' => 'Scrivici', 'href' => $whatsapp, 'external' => true, 'featured' => false, 'aside' => null];
 }
 $cards[] = ['icon' => 'pin', 'title' => 'Come raggiungerci', 'meta' => $site->address, 'href' => $maps->googleMaps(), 'external' => true, 'featured' => false, 'aside' => null];
-$cards[] = ['icon' => 'calendar', 'title' => 'Prenotazioni', 'meta' => null, 'href' => null, 'external' => false, 'featured' => false, 'aside' => null];
+$cards[] = ['icon' => 'calendar', 'title' => 'Prenotazioni', 'meta' => $bookingUrl === null ? null : 'Scegli la tua fascia', 'href' => $bookingUrl, 'external' => false, 'featured' => false, 'aside' => null];
 $cards[] = ['icon' => 'bag', 'title' => 'Shop', 'meta' => 'Vendita online', 'href' => null, 'external' => false, 'featured' => false, 'aside' => null];
 ?>
 <main class="flex flex-1 flex-col lg:justify-center">

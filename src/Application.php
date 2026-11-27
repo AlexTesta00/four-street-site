@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace FourStreet;
 
 use FourStreet\Account\AccountModule;
+use FourStreet\Account\AccountUrls;
 use FourStreet\Account\Http\AccountPages;
 use FourStreet\Account\Http\AccountUnavailableController;
 use FourStreet\Asset\AssetUrls;
 use FourStreet\Asset\FilesystemMtimeLookup;
 use FourStreet\Asset\MtimeLookup;
+use FourStreet\Booking\BookingModule;
+use FourStreet\Booking\BookingUrls;
 use FourStreet\Clock\Clock;
 use FourStreet\Clock\SystemClock;
 use FourStreet\Config\LocalConfig;
@@ -42,7 +45,7 @@ use Throwable;
  * Il sito: riceve una richiesta, restituisce una risposta; poi, con finish(), fa il lavoro che può
  * aspettare (le email in coda). Un'Application serve una richiesta sola, come in index.php.
  * create() è l'unico punto in cui le dipendenze vengono costruite e collegate; ogni modulo
- * (l'area clienti) porta le sue rotte già pronte.
+ * (l'area clienti, le prenotazioni) porta le sue rotte già pronte.
  */
 final readonly class Application
 {
@@ -105,25 +108,49 @@ final readonly class Application
         $dates = new ItalianDateFormatter();
         $maps = new MapLinks($site->address, $site->mapsUrl);
 
-        // Senza database e posta l'area clienti risponde "non ancora attiva"; home, link e calendario non cambiano.
+        // Senza database e posta l'area clienti risponde "non ancora attiva" e le prenotazioni "presto";
+        // home, link e calendario funzionano come sempre.
         if ($backend === null) {
             $outbox = null;
-            $accountRoutes = AccountModule::unavailableRoutes(new AccountUnavailableController(new AccountPages($view, $site, $clock)));
+            $accountUnavailable = new AccountUnavailableController(new AccountPages($view, $site, $clock));
+            $accountRoutes = AccountModule::unavailableRoutes($accountUnavailable);
+            $bookingRoutes = BookingModule::unavailableRoutes(BookingModule::comingSoon($view, $site, $clock), $accountUnavailable);
         } else {
             $outbox = new Outbox($backend->mailer, $reporter);
-            $accountRoutes = AccountModule::create($backend, $view, $site, $clock, $reporter, $outbox, new FormExpiredController($view, $site, $clock))->routes();
+            $account = AccountModule::create(
+                $backend,
+                $view,
+                $site,
+                $clock,
+                $reporter,
+                $outbox,
+                new FormExpiredController($view, $site, $clock),
+                [BookingModule::dashboardSection($backend, $view, $site, $clock, $reporter)],
+            );
+            $accountRoutes = $account->routes();
+            $bookingRoutes = BookingModule::create($backend, $view, $site, $clock, $reporter, $account->guards())->routes();
         }
+        $bookingsOnline = $backend !== null && $site->booking->online;
 
         $router = new Router([
-            // Le fasce di esempio di config/site.php; con le prenotazioni vere, un catalogo sul database.
-            Route::get('/', new HomeController($view, $site, $clock, $dates, $maps, $site->booking)),
-            Route::get('/links/', new LinksController($view, $site, $clock, $dates, $maps)),
+            // Con le prenotazioni attive le fasce vere (una lettura, dentro un guscio); altrimenti quelle di esempio.
+            Route::get('/', new HomeController(
+                $view,
+                $site,
+                $clock,
+                $dates,
+                $maps,
+                BookingModule::landingSlots($backend, $site, $clock, $reporter),
+                $backend === null ? null : AccountUrls::HOME,
+            )),
+            Route::get('/links/', new LinksController($view, $site, $clock, $dates, $maps, $bookingsOnline ? BookingUrls::DAY : null)),
             // Indirizzo già condiviso: non cambiarlo.
             Route::get('/calendario.php', new CalendarController($site, $clock)),
             // Vecchi indirizzi dei file PHP, prima del front controller.
             Route::get('/index.php', new RedirectController('/')),
             Route::get('/links/index.php', new RedirectController('/links/')),
             ...$accountRoutes,
+            ...$bookingRoutes,
         ]);
 
         return new self($router, new NotFoundController($view, $site), SecurityHeaders::forSite(), $reporter, $outbox);

@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
-use FourStreet\Booking\SlotCatalog;
+use FourStreet\Booking\Landing\LivePreview;
+use FourStreet\Booking\Landing\SlotPreview;
+use FourStreet\Booking\Landing\TimetablePreview;
 use FourStreet\Config\SiteConfig;
 use FourStreet\Content\PendingContent;
 use FourStreet\Maps\MapLinks;
@@ -15,12 +17,14 @@ use FourStreet\View\Template;
  * Prima dell'inaugurazione la pagina ha il countdown. Allo zero lo script nasconde le parti
  * data-state="pre", mostra quelle data-state="open" (già in pagina, nascoste) e cambia il titolo,
  * senza ricaricare. Dal giorno dell'apertura (o con ?anteprima=mappa) il server scrive già lo stato "open".
+ * Con le prenotazioni attive ($slots con le fasce vere, o solo gli orari) i testi parlano al presente.
  *
  * @var Template $view
  * @var SiteConfig $site
  * @var OpeningSchedule $schedule
  * @var MapLinks $maps
- * @var SlotCatalog $slots
+ * @var SlotPreview $slots
+ * @var string|null $accountUrl l'area clienti, se il server la offre
  * @var PendingContent $content
  * @var Html $structuredData
  * @var string $dateLong "Domenica 6 dicembre 2026"
@@ -31,6 +35,7 @@ use FourStreet\View\Template;
  */
 
 $open = $schedule->isLive();
+$booking = $slots instanceof LivePreview || $slots instanceof TimetablePreview;
 $time = $site->openingTime();
 // L'inaugurazione dentro una frase: "domenica 6 dicembre 2026, ore 15:00" (l'orario solo se confermato).
 $when = $dateText . ($time !== null ? ', ore ' . $time : '');
@@ -40,7 +45,8 @@ $whatsapp = $site->link('whatsapp');
 
 $view->layout('layouts/base', [
     'title' => $open ? $openTitle : '4Street · Apriamo ' . $dateShort,
-    'description' => '4Street, palestra a San Marino. Cinque persone per fascia oraria, non una di più. '
+    'description' => '4Street, palestra a San Marino. '
+        . ($booking ? 'Cinque persone per fascia oraria: prenota la tua dal sito. ' : 'Cinque persone per fascia oraria, non una di più. ')
         . ($open ? 'Ti aspettiamo in ' . $site->address . '.' : 'Inaugurazione ' . $dateShort . ' in ' . $site->address . '.'),
     'siteUrl' => $site->siteUrl,
     'structuredData' => $structuredData,
@@ -48,7 +54,7 @@ $view->layout('layouts/base', [
 ?>
 <a href="#contenuto" class="fs-skip fs-label">Vai al contenuto</a>
 
-<?= $view->partial('partials/landing/site-bar', ['open' => $open, 'dateTag' => $dateTag]) ?>
+<?= $view->partial('partials/landing/site-bar', ['open' => $open, 'dateTag' => $dateTag, 'accountUrl' => $accountUrl]) ?>
 
 <main id="contenuto" class="flex flex-1 flex-col">
 
@@ -71,7 +77,7 @@ $view->layout('layouts/base', [
 
 <?= $view->partial('partials/landing/rule') ?>
 
-<?= $view->partial('partials/landing/booking', ['slots' => $slots, 'address' => $site->address, 'whatsapp' => $whatsapp]) ?>
+<?= $view->partial('partials/landing/booking', ['slots' => $slots, 'address' => $site->address, 'whatsapp' => $whatsapp, 'accountUrl' => $accountUrl]) ?>
 
 <?= $view->partial('partials/landing/space', ['content' => $content, 'address' => $site->address]) ?>
 
@@ -87,6 +93,7 @@ $view->layout('layouts/base', [
 <?= $view->partial('partials/landing/faq', [
     'content' => $content,
     'open' => $open,
+    'booking' => $booking,
     'address' => $site->address,
     'dateText' => $dateText,
     'when' => $when,
@@ -108,6 +115,7 @@ $view->layout('layouts/base', [
     'address' => $site->address,
     'instagram' => $site->link('instagram'),
     'whatsapp' => $whatsapp,
+    'accountUrl' => $accountUrl,
     'year' => $year,
 ]) ?>
 

@@ -6,10 +6,11 @@ use FourStreet\Account\AccountUrls;
 use FourStreet\Account\User;
 use FourStreet\Config\SiteConfig;
 use FourStreet\View\Alert;
+use FourStreet\View\Html;
 use FourStreet\View\Template;
 
 /**
- * /account/: il saluto, i dati dell'account, le prenotazioni e l'uscita.
+ * /account/: il saluto, le sezioni degli altri moduli (le prenotazioni), i dati dell'account e l'uscita.
  *
  * @var Template $view
  * @var SiteConfig $site
@@ -18,6 +19,7 @@ use FourStreet\View\Template;
  * @var User $user
  * @var string $createdOn "Giovedì 26 novembre 2026"
  * @var Alert|null $alert
+ * @var list<Html> $sections già pronte, ognuna con il suo titolo
  */
 
 $view->layout('layouts/account', [
@@ -33,11 +35,10 @@ $view->layout('layouts/account', [
 <?= $view->partial('partials/alert', ['alert' => $alert]) ?>
 <?php endif; ?>
 
-<section aria-labelledby="prenotazioni-titolo" class="fs-account__section">
-  <h2 id="prenotazioni-titolo" class="fs-label text-fg-subtle">Le tue prenotazioni</h2>
-  <?= $view->partial('partials/account/bookings') ?>
-</section>
+<?php foreach ($sections as $section): ?>
+<?= $section ?>
 
+<?php endforeach; ?>
 <section aria-labelledby="dati-titolo" class="fs-account__section">
   <h2 id="dati-titolo" class="fs-label text-fg-subtle">I tuoi dati</h2>
   <dl class="fs-dl fs-dl--stack">
@@ -63,3 +64,4 @@ $view->layout('layouts/account', [
     <span>Esci</span>
   </button>
 </form>
+</output>

@@ -41,7 +41,7 @@ final class IconsTest extends TestCase
         $icons = new Icons();
 
         self::assertSame(
-            ['arrow', 'calendar', 'navigate', 'copy', 'list', 'plus', 'instagram', 'whatsapp', 'pin', 'clock', 'bag', 'check', 'alert', 'info', 'mail', 'exit'],
+            ['arrow', 'calendar', 'navigate', 'copy', 'list', 'plus', 'instagram', 'whatsapp', 'pin', 'clock', 'bag', 'check', 'alert', 'info', 'mail', 'exit', 'user'],
             $icons->names(),
         );
         foreach ($icons->names() as $name) {
