@@ -16,16 +16,28 @@ final readonly class SecurityHeaders
         private array $headers,
     ) {}
 
-    public static function forSite(): self
+    /**
+     * @param bool $https il sito è in HTTPS. Lo dice l'origine pubblica, come per i cookie Secure (CookiePolicy),
+     *                    mai la richiesta: fuori da localhost il .htaccess porta ogni richiesta http su https
+     *                    prima che arrivi qui, e su http://localhost l'origine è in http.
+     */
+    public static function forSite(bool $https = false): self
     {
-        return new self([
+        $headers = [
             'Content-Security-Policy' => self::contentSecurityPolicy(),
             'X-Content-Type-Options' => 'nosniff',
             'X-Frame-Options' => 'DENY',
             'Referrer-Policy' => 'strict-origin-when-cross-origin',
             'Permissions-Policy' => 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
             'Cross-Origin-Opener-Policy' => 'same-origin',
-        ]);
+        ];
+        if ($https) {
+            // Per un anno il browser non prova più l'HTTP su questo host. Solo questo host: niente
+            // includeSubDomains né preload, scelte che coinvolgono altri siti e non si disfano in fretta.
+            $headers['Strict-Transport-Security'] = 'max-age=31536000';
+        }
+
+        return new self($headers);
     }
 
     /**

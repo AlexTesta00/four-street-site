@@ -41,6 +41,7 @@ final readonly class Registration
         #[SensitiveParameter]
         string $password,
         ReturnPath $returnTo,
+        #[SensitiveParameter]
         string $ip,
         string $browserHash,
     ): Delivery {

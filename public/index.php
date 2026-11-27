@@ -9,6 +9,12 @@ use FourStreet\Application;
 use FourStreet\Config\LocalConfig;
 use FourStreet\Http\Request;
 
+// Gli errori non si mostrano mai nella pagina, qualunque cosa dica il php.ini del server: un errore
+// all'avvio (una configurazione sbagliata) scriverebbe nella risposta i percorsi del server. Vanno sempre
+// nel log (senza php.ini PHP non lo scrive): sul server di sviluppo è il terminale di npm run serve.
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+
 // Server di sviluppo (php -S … public/index.php): i file statici esistenti li serve lui direttamente.
 // Mai i file nascosti, la cartella _app/ o altri script PHP: quelli passano dall'applicazione (404).
 if (PHP_SAPI === 'cli-server') {

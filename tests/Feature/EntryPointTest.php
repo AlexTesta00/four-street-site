@@ -75,6 +75,27 @@ final class EntryPointTest extends TestCase
         }
     }
 
+    public function testAnErrorAtStartupShowsNothingAndGoesToTheLog(): void
+    {
+        // Una configurazione locale che non c'è ferma l'avvio: nella risposta nessun percorso del server,
+        // qualunque cosa dica il php.ini; l'errore è nel log.
+        $temporary = new TemporaryDirectory();
+        try {
+            $log = $temporary->path . '/php.log';
+            [$exitCode, $output] = self::runPhp(
+                ['-d', 'display_errors=1', '-d', 'error_log=' . $log, SiteFixture::rootDirectory() . '/public/index.php'],
+                ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => '/', LocalConfig::FILE_VARIABLE => $temporary->path . '/manca.php'],
+            );
+
+            self::assertSame(255, $exitCode);
+            self::assertSame('', $output);
+            self::assertFileExists($log);
+            self::assertStringContainsString('Configurazione locale non trovata', (string) file_get_contents($log));
+        } finally {
+            $temporary->remove();
+        }
+    }
+
     /** Una configurazione locale nella cartella temporanea: SQLite e posta in file. */
     private static function localConfig(TemporaryDirectory $temporary): string
     {

@@ -109,6 +109,18 @@ final class AccountEmailsTest extends TestCase
         $this->assertSafeHtml($message);
     }
 
+    public function testTheRegistrationIncompleteEmailLeadsToTheRegistrationAndKeepsTheDestination(): void
+    {
+        $message = $this->emails->registrationIncomplete($this->user, ReturnPath::fromInput('/prenota/'));
+
+        self::assertSame('Completa la registrazione', $message->subject);
+        self::assertStringContainsString('La registrazione però non è stata completata', $message->text);
+        self::assertStringContainsString("\n\nhttps://fourstreet.studio/account/registrati/?ritorno=/prenota/\n\n", $message->text);
+        $this->assertSafeHtml($message);
+        self::assertStringContainsString('href="https://fourstreet.studio/account/registrati/?ritorno=/prenota/"', (string) $message->html);
+        self::assertStringContainsString('>Registrati</a>', (string) $message->html);
+    }
+
     public function testThePasswordChangedEmailUsesTheLocalTime(): void
     {
         $message = $this->emails->passwordChanged($this->user, new DateTimeImmutable('2026-12-06 14:05:00', new DateTimeZone('UTC')));
@@ -130,6 +142,7 @@ final class AccountEmailsTest extends TestCase
         foreach ([
             $this->emails->verification($pending, self::token()),
             $this->emails->passwordReset($pending, self::token()),
+            $this->emails->registrationIncomplete($pending, ReturnPath::default()),
             $this->emails->passwordChanged($pending, $at),
         ] as $message) {
             self::assertSame('', $message->to->name, $message->subject);

@@ -162,7 +162,10 @@ final readonly class Application
             ...$adminRoutes,
         ]);
 
-        return new self($router, $notFound, SecurityHeaders::forSite(), $reporter, $outbox);
+        // HTTPS lo dice l'origine pubblica, come per i cookie: base_url, oppure site_url senza config/local.php.
+        $https = $backend !== null ? $backend->origin->isSecure() : str_starts_with(strtolower((string) $site->siteUrl), 'https://');
+
+        return new self($router, $notFound, SecurityHeaders::forSite($https), $reporter, $outbox);
     }
 
     public function handle(Request $request): Response

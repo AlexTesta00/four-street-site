@@ -54,6 +54,17 @@ final readonly class AccountEmails
         ]));
     }
 
+    /**
+     * Qualcuno ha chiesto una nuova password per un account mai confermato: la registrazione non è completa
+     * e va rifatta (prende il posto di quella in sospeso). Il link porta alla pagina di registrazione.
+     */
+    public function registrationIncomplete(User $user, ReturnPath $returnTo): Message
+    {
+        return $this->templates->message($user->mailbox(), 'Completa la registrazione', 'registration-incomplete', $this->data($user, [
+            'registerUrl' => $this->origin->url(AccountUrls::to(AccountUrls::REGISTER, $returnTo)),
+        ]));
+    }
+
     /** Avviso dopo il cambio della password. */
     public function passwordChanged(User $user, DateTimeImmutable $at): Message
     {

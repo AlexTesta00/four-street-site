@@ -26,6 +26,16 @@ final class SecurityHeadersTest extends TestCase
         self::assertSame('text/html; charset=utf-8', $response->header('Content-Type'));
     }
 
+    public function testStrictTransportSecurityOnlyWhenTheSiteIsInHttps(): void
+    {
+        $https = SecurityHeaders::forSite(https: true)->applyTo(new Response());
+
+        // Un anno, solo per questo host: niente includeSubDomains né preload.
+        self::assertSame('max-age=31536000', $https->header('Strict-Transport-Security'));
+        self::assertFalse(SecurityHeaders::forSite(https: false)->applyTo(new Response())->hasHeader('Strict-Transport-Security'));
+        self::assertFalse(SecurityHeaders::forSite()->applyTo(new Response())->hasHeader('Strict-Transport-Security'));
+    }
+
     public function testTheContentSecurityPolicy(): void
     {
         $policy = self::directives(SecurityHeaders::forSite()->applyTo(new Response())->header('Content-Security-Policy'));

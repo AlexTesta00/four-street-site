@@ -7,6 +7,10 @@ namespace FourStreet\Tests\Feature\Account;
 use FourStreet\Account\Http\ForgotPasswordController;
 use FourStreet\Account\Http\ResetPasswordController;
 use FourStreet\Account\PasswordReset;
+use FourStreet\Account\ReturnPath;
+use FourStreet\Account\Token\AccountTokens;
+use FourStreet\Account\Token\PdoAccountTokenRepository;
+use FourStreet\Account\Token\TokenPurpose;
 use FourStreet\Application;
 use FourStreet\Http\Response;
 use FourStreet\Tests\Support\AccountFixture;
@@ -129,19 +133,46 @@ final class PasswordResetTest extends TestCase
 
     public function testTheRequestIsAnsweredTheSameWayForAnyAddress(): void
     {
+        $this->fixture->register($this->fixture->browser('198.51.100.30'), 'anna@example.com', 'la password di anna');
         $emails = count($this->fixture->mailer->sent);
 
         $browser = $this->fixture->browser();
         $browser->get('/account/password-dimenticata/');
         $unknown = $browser->post('/account/password-dimenticata/', ['email' => 'nessuno@example.com']);
+        $unconfirmed = $browser->post('/account/password-dimenticata/', ['email' => 'anna@example.com']);
         $known = $browser->post('/account/password-dimenticata/', ['email' => AccountFixture::EMAIL]);
 
-        foreach ([$unknown, $known] as $response) {
+        foreach ([$unknown, $unconfirmed, $known] as $response) {
             self::assertSame(303, $response->status);
             self::assertSame('/account/password-dimenticata/controlla-la-posta/', $response->header('Location'));
             self::assertSame([], TestBrowser::setCookieHeaders($response));
+            self::assertSame($unknown->headers(), $response->headers());
         }
-        self::assertCount($emails + 1, $this->fixture->mailer->sent, 'Solo l\'indirizzo con un account riceve il link.');
+        // Cambia solo l'email nella casella: il link per l'account confermato, la registrazione da rifare per quello in sospeso.
+        self::assertCount($emails + 2, $this->fixture->mailer->sent);
+        self::assertSame('Scegli una nuova password', $this->fixture->mailer->lastTo(AccountFixture::EMAIL)->subject);
+        self::assertSame('Completa la registrazione', $this->fixture->mailer->lastTo('anna@example.com')->subject);
+    }
+
+    /**
+     * Il tetto delle email (5 l'ora per indirizzo) si consuma anche per un indirizzo senza account: altrimenti
+     * chi lo esaurisce qui e poi si registra con quell'email capirebbe dal tempo di risposta della registrazione
+     * (che manda subito, oppure no) se l'account c'è.
+     */
+    public function testEveryRequestCountsInTheEmailCapEvenWithoutAnAccount(): void
+    {
+        $browser = $this->fixture->browser('198.51.100.30');
+        $browser->get('/account/password-dimenticata/');
+        for ($request = 1; $request <= 5; ++$request) {
+            self::assertSame(303, $browser->post('/account/password-dimenticata/', ['email' => 'nessuno@example.com'])->status);
+        }
+
+        $registered = $this->fixture->register($this->fixture->browser('198.51.100.31'), 'nessuno@example.com');
+
+        // Come per un indirizzo con l'account e il tetto esaurito: la stessa pagina, e non parte nulla.
+        self::assertSame('/account/registrati/controlla-la-posta/', $registered->header('Location'));
+        self::assertSame([], $this->fixture->mailer->sentTo('nessuno@example.com'));
+        self::assertSame(1, $this->fixture->count('users'), 'Oltre il tetto la registrazione si ferma prima di creare l\'account.');
     }
 
     public function testAFailedRequestLooksLikeASentOne(): void
@@ -160,29 +191,49 @@ final class PasswordResetTest extends TestCase
         self::assertStringNotContainsString('Non siamo riusciti', $browser->follow($known)->body);
     }
 
-    public function testAResetAlsoConfirmsTheEmail(): void
+    /**
+     * Un account mai confermato non riceve il link per la nuova password: ha il nome, la password e il consenso
+     * di chi ha compilato la registrazione, magari un estraneo, e la password nuova li farebbe propri. L'email
+     * dice che la registrazione non è completa e porta alla registrazione, che prende il posto di quella in sospeso.
+     */
+    public function testAnUnconfirmedAccountIsSentToRegisterAgain(): void
     {
-        $this->fixture->register($this->fixture->browser('198.51.100.30'), 'anna@example.com', 'la password di anna', 'Anna Bianchi');
+        $this->fixture->register($this->fixture->browser('198.51.100.30'), 'anna@example.com', 'la password di un estraneo', 'Nome Estraneo');
         $browser = $this->fixture->browser();
-        $browser->get('/account/password-dimenticata/');
-        $browser->post('/account/password-dimenticata/', ['email' => 'anna@example.com']);
+        $browser->get('/account/password-dimenticata/?ritorno=/prenota/');
+        $sent = $browser->post('/account/password-dimenticata/', ['email' => 'anna@example.com', 'ritorno' => '/prenota/']);
+        self::assertSame('/account/password-dimenticata/controlla-la-posta/?ritorno=/prenota/', $sent->header('Location'));
+
         $email = $this->fixture->mailer->lastTo('anna@example.com');
-        $link = InMemoryMailer::link($email, '/account/nuova-password/');
-        $browser->get($link);
+        self::assertSame('Completa la registrazione', $email->subject);
+        // Il nome l'ha scritto chi ha compilato la registrazione: nelle email non c'è.
+        self::assertSame('', $email->to->name);
+        self::assertStringContainsString("Ciao,\n", $email->text);
+        self::assertStringNotContainsString('Nome Estraneo', $email->text);
+        self::assertStringNotContainsString('Nome Estraneo', (string) $email->html);
+        self::assertStringNotContainsString('/account/nuova-password/', $email->text);
+        $link = InMemoryMailer::link($email, '/account/registrati/');
+        self::assertSame('/account/registrati/?ritorno=/prenota/', $link);
 
-        $changed = $browser->post('/account/nuova-password/', ['token' => substr($link, strlen('/account/nuova-password/?token=')), 'password' => self::NEW_PASSWORD]);
+        // La registrazione nuova sostituisce quella in sospeso: valgono il nome e la password nuovi.
+        self::assertSame(200, $browser->get($link)->status);
+        $this->fixture->register($browser, 'anna@example.com', self::NEW_PASSWORD, 'Anna Bianchi', '/prenota/');
+        self::assertSame('/prenota/', $browser->get(InMemoryMailer::link($this->fixture->mailer->lastTo('anna@example.com'), '/account/verifica/'))->header('Location'));
+        self::assertSame('Anna Bianchi', $this->fixture->user('anna@example.com')->fullName);
+        self::assertSame(422, $this->fixture->logIn($this->fixture->browser('198.51.100.31'), 'anna@example.com', 'la password di un estraneo')->status);
+    }
 
-        self::assertSame(303, $changed->status);
-        self::assertSame(200, $browser->get('/account/')->status);
-        // L'account non era confermato: il nome l'ha scritto chi ha compilato la registrazione, e nelle email non c'è.
-        $warning = $this->fixture->mailer->lastTo('anna@example.com');
-        self::assertSame('La tua password è cambiata', $warning->subject);
-        foreach ([$email, $warning] as $message) {
-            self::assertSame('', $message->to->name);
-            self::assertStringContainsString("Ciao,\n", $message->text);
-            self::assertStringNotContainsString('Anna Bianchi', $message->text);
-            self::assertStringNotContainsString('Anna Bianchi', (string) $message->html);
-        }
+    public function testAResetLinkNeverWorksForAnUnconfirmedAccount(): void
+    {
+        // Un link chiesto prima di questa regola: non cambia la password di un account in sospeso.
+        $this->fixture->register($this->fixture->browser('198.51.100.30'), 'anna@example.com', 'la password di anna');
+        $token = (new AccountTokens(new PdoAccountTokenRepository($this->fixture->database), $this->fixture->clock))
+            ->issue($this->fixture->user('anna@example.com'), TokenPurpose::PasswordReset, ReturnPath::default());
+        $browser = $this->fixture->browser();
+
+        self::assertSame(410, $browser->get('/account/nuova-password/?token=' . $token->value)->status);
+        self::assertSame(410, $browser->post('/account/nuova-password/', ['token' => $token->value, 'password' => self::NEW_PASSWORD])->status);
+        self::assertSame(422, $this->fixture->logIn($this->fixture->browser('198.51.100.31'), 'anna@example.com', self::NEW_PASSWORD)->status);
     }
 
     public function testTheDestinationSurvivesTheReset(): void

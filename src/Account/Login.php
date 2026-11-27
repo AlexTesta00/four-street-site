@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace FourStreet\Account;
 
 use FourStreet\Clock\Clock;
-use FourStreet\Security\IpAddress;
 use FourStreet\Security\Password\PasswordHasher;
 use FourStreet\Security\RateLimit\RateLimiter;
 use SensitiveParameter;
@@ -16,8 +15,10 @@ use SensitiveParameter;
  * finto se l'account non c'è, così né il testo né il tempo di risposta dicono se l'email è registrata.
  * Un account in sospeso non si distingue nemmeno con la password giusta: chiunque può registrare un
  * indirizzo non suo, e la risposta direbbe se quell'indirizzo aveva già un account confermato.
- * I tentativi si contano per indirizzo IP e per email prima di verificare la password: tanti tentativi
- * mandati insieme non passano il limite. Un accesso riuscito azzera il contatore dell'email.
+ * I tentativi si contano prima di verificare la password (tanti tentativi mandati insieme non passano il
+ * limite): per indirizzo IP, per email dallo stesso indirizzo e per email da tutti gli indirizzi, con un tetto
+ * che da un indirizzo solo non si raggiunge (AccountThrottle::hitLogin()). Un accesso riuscito azzera i
+ * tentativi di quell'email da quell'indirizzo.
  */
 final readonly class Login
 {
@@ -28,11 +29,9 @@ final readonly class Login
         private Clock $clock,
     ) {}
 
-    public function attempt(EmailAddress $email, #[SensitiveParameter] string $password, string $ip): LoginResult
+    public function attempt(EmailAddress $email, #[SensitiveParameter] string $password, #[SensitiveParameter] string $ip): LoginResult
     {
-        $perAccount = AccountThrottle::LoginPerAccount->limit();
-        $status = $this->limiter->hit(AccountThrottle::LoginPerIp->limit(), IpAddress::rateLimitSubject($ip))
-            ->and($this->limiter->hit($perAccount, $email->value));
+        $status = AccountThrottle::hitLogin($this->limiter, $email, $ip);
         if (!$status->allowed) {
             return LoginResult::throttled($status->retryAfter);
         }
@@ -43,7 +42,7 @@ final readonly class Login
             return LoginResult::wrongCredentials();
         }
 
-        $this->limiter->reset($perAccount, $email->value);
+        AccountThrottle::resetLogin($this->limiter, $email, $ip);
         // Parametri dell'hash cambiati (Argon2id più costoso, PHP nuovo): si rifà ora che la password è nota.
         if ($this->passwords->needsRehash($user->passwordHash)) {
             $this->users->updatePasswordHash($user->id, $this->passwords->hash($password), $this->clock->now());

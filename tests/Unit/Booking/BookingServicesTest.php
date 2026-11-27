@@ -368,7 +368,7 @@ final class BookingServicesTest extends TestCase
     {
         $users = new PdoUserRepository($this->database);
         $user = $users->create(new NewUser(FullName::tryFrom($name) ?? self::fail(), EmailAddress::tryFrom($email) ?? self::fail(), 'hash', $this->clock->now(), str_repeat('0', 64)));
-        $users->markEmailVerified($user->id, $this->clock->now());
+        $users->markEmailVerified($user, $this->clock->now());
 
         return $users->findById($user->id) ?? self::fail();
     }

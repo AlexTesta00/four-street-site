@@ -186,20 +186,58 @@ final class LoginTest extends TestCase
         self::assertStringContainsString('<li><a href="#password">Scrivi la password.</a></li>', $response->body);
     }
 
-    public function testTooManyWrongPasswordsOnOneAccount(): void
+    public function testTooManyWrongPasswordsOnOneAccountFromOneAddress(): void
     {
         for ($attempt = 1; $attempt <= 8; ++$attempt) {
-            self::assertSame(422, $this->fixture->logIn($this->fixture->browser(sprintf('198.51.100.%d', $attempt)), password: 'sbagliata')->status);
+            self::assertSame(422, $this->fixture->logIn($this->fixture->browser('198.51.100.66'), password: 'sbagliata')->status);
         }
 
-        // Anche con la password giusta, e da un'altra connessione: l'account aspetta.
-        $blocked = $this->fixture->logIn($this->fixture->browser('198.51.100.99'));
+        // Anche con la password giusta: da quell'indirizzo l'account aspetta.
+        $blocked = $this->fixture->logIn($this->fixture->browser('198.51.100.66'));
         self::assertSame(429, $blocked->status);
         self::assertSame('900', $blocked->header('Retry-After'));
         self::assertStringContainsString('Riprova tra 15 minuti.', $blocked->body);
 
+        // Da un altro indirizzo il cliente entra; da quello bloccato, finita la finestra.
+        self::assertSame(303, $this->fixture->logIn($this->fixture->browser('198.51.100.67'))->status);
         $this->fixture->clock->travel('+15 minutes');
-        self::assertSame(303, $this->fixture->logIn($this->fixture->browser('198.51.100.99'))->status);
+        self::assertSame(303, $this->fixture->logIn($this->fixture->browser('198.51.100.66'))->status);
+    }
+
+    /**
+     * Chi conosce l'email di un cliente e prova password da un indirizzo solo non gli blocca l'accesso:
+     * oltre il limite della coppia (8) e poi dell'indirizzo (20) i suoi tentativi non contano più
+     * sull'email, e da lì il tetto dell'email (40) non si raggiunge.
+     */
+    public function testAnAttackerFromOneAddressDoesNotLockOutTheCustomer(): void
+    {
+        $attacker = $this->fixture->browser('198.51.100.66');
+        for ($attempt = 1; $attempt <= 50; ++$attempt) {
+            self::assertSame($attempt <= 8 ? 422 : 429, $this->fixture->logIn($attacker, password: 'tentativo ' . $attempt)->status, sprintf('Tentativo %d.', $attempt));
+        }
+
+        // Il cliente entra dal suo indirizzo, anche dopo un errore di battitura.
+        $customer = $this->fixture->browser('203.0.113.50');
+        self::assertSame(422, $this->fixture->logIn($customer, password: 'sbagliata')->status);
+        self::assertSame(303, $this->fixture->logIn($customer)->status);
+    }
+
+    public function testManyAddressesTogetherReachTheCeilingOfTheAccount(): void
+    {
+        // Cinque indirizzi, otto tentativi ciascuno: il tetto dell'email (40) è pieno.
+        for ($address = 1; $address <= 5; ++$address) {
+            for ($attempt = 1; $attempt <= 8; ++$attempt) {
+                self::assertSame(422, $this->fixture->logIn($this->fixture->browser(sprintf('198.51.100.%d', $address)), password: 'sbagliata')->status);
+            }
+        }
+
+        // Ora l'account aspetta da ogni indirizzo, anche con la password giusta, fino alla fine della finestra.
+        $blocked = $this->fixture->logIn($this->fixture->browser('203.0.113.50'));
+        self::assertSame(429, $blocked->status);
+        self::assertSame('900', $blocked->header('Retry-After'));
+
+        $this->fixture->clock->travel('+15 minutes');
+        self::assertSame(303, $this->fixture->logIn($this->fixture->browser('203.0.113.50'))->status);
     }
 
     public function testTooManyWrongPasswordsFromOneAddress(): void
@@ -214,16 +252,18 @@ final class LoginTest extends TestCase
         self::assertSame(303, $this->fixture->logIn($this->fixture->browser('198.51.100.67'))->status);
     }
 
-    public function testASuccessfulLoginClearsTheFailuresOfTheAccount(): void
+    public function testASuccessfulLoginClearsTheFailuresOfTheAccountFromThatAddress(): void
     {
         for ($attempt = 1; $attempt <= 7; ++$attempt) {
-            $this->fixture->logIn($this->fixture->browser(sprintf('198.51.100.%d', $attempt)), password: 'sbagliata');
+            $this->fixture->logIn($this->fixture->browser('198.51.100.66'), password: 'sbagliata');
         }
-        self::assertSame(303, $this->fixture->logIn($this->fixture->browser())->status);
+        self::assertSame(303, $this->fixture->logIn($this->fixture->browser('198.51.100.66'))->status);
 
-        for ($attempt = 1; $attempt <= 7; ++$attempt) {
-            self::assertSame(422, $this->fixture->logIn($this->fixture->browser(sprintf('198.51.100.%d', $attempt + 10)), password: 'sbagliata')->status);
+        // Senza l'azzeramento il prossimo tentativo sarebbe già il nono.
+        for ($attempt = 1; $attempt <= 8; ++$attempt) {
+            self::assertSame(422, $this->fixture->logIn($this->fixture->browser('198.51.100.66'), password: 'sbagliata')->status);
         }
+        self::assertSame(429, $this->fixture->logIn($this->fixture->browser('198.51.100.66'), password: 'sbagliata')->status);
     }
 
     public function testThePasswordHashIsRefreshedWhenTheParametersChange(): void

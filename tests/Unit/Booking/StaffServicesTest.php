@@ -435,7 +435,7 @@ final class StaffServicesTest extends TestCase
     {
         $users = new PdoUserRepository($this->database);
         $user = $users->create(new NewUser(self::person($name), self::email($email), 'hash', $this->clock->now(), str_repeat('0', 64)));
-        $users->markEmailVerified($user->id, $this->clock->now());
+        $users->markEmailVerified($user, $this->clock->now());
 
         return $users->findById($user->id) ?? self::fail();
     }

@@ -93,13 +93,19 @@ final readonly class PdoUserRepository implements UserRepository
         );
     }
 
-    public function markEmailVerified(int $id, DateTimeImmutable $at): void
+    public function markEmailVerified(User $user, DateTimeImmutable $at): bool
     {
-        $this->database->execute(
+        // La password letta dice se la riga è ancora quella: una registrazione nuova ne scrive sempre un'altra.
+        return $this->database->execute(
             'UPDATE users SET email_verified_at = :email_verified_at, signup_browser_hash = NULL, updated_at = :updated_at'
-            . ' WHERE id = :id AND email_verified_at IS NULL',
-            ['email_verified_at' => UtcDateTime::format($at), 'updated_at' => UtcDateTime::format($at), 'id' => $id],
-        );
+            . ' WHERE id = :id AND email_verified_at IS NULL AND password_hash = :password_hash',
+            [
+                'email_verified_at' => UtcDateTime::format($at),
+                'updated_at' => UtcDateTime::format($at),
+                'id' => $user->id,
+                'password_hash' => $user->passwordHash,
+            ],
+        ) === 1;
     }
 
     public function updatePasswordHash(int $id, string $passwordHash, DateTimeImmutable $at): void

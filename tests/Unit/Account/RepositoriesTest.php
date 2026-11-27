@@ -141,9 +141,12 @@ final class RepositoriesTest extends TestCase
         self::assertSame('2026-11-25 08:00:00', UtcDateTime::format($replaced->privacyAcceptedAt));
         self::assertSame('2026-11-25 07:00:00', UtcDateTime::format($replaced->createdAt));
 
-        $this->users->markEmailVerified($user->id, $this->clock->now());
+        // $user è la registrazione di prima, letta prima della sostituzione: confermarla non cambia nulla.
+        self::assertFalse($this->users->markEmailVerified($user, $this->clock->now()));
+        self::assertNull($this->find($user->id)->emailVerifiedAt, 'L\'account non si conferma con la password di un altro.');
+        self::assertTrue($this->users->markEmailVerified($replaced, $this->clock->now()));
         $this->clock->travel('+1 hour');
-        $this->users->markEmailVerified($user->id, $this->clock->now());
+        self::assertFalse($this->users->markEmailVerified($replaced, $this->clock->now()));
         $verified = $this->find($user->id);
         self::assertNotNull($verified->emailVerifiedAt);
         self::assertSame('2026-11-25 08:00:00', UtcDateTime::format($verified->emailVerifiedAt), 'La prima conferma resta.');

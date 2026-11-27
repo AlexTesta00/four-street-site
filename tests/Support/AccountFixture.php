@@ -138,7 +138,7 @@ final class AccountFixture
         Assert::assertNotNull($address);
         $hash = NativePasswordHasher::bcrypt(4)->hash(self::PASSWORD);
         $user = $users->create(new NewUser($fullName, $address, $hash, $this->clock->now(), str_repeat('0', 64)));
-        $users->markEmailVerified($user->id, $this->clock->now());
+        $users->markEmailVerified($user, $this->clock->now());
         $verified = $users->findById($user->id);
         Assert::assertNotNull($verified);
 

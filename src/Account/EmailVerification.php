@@ -63,10 +63,10 @@ final readonly class EmailVerification
 
     /**
      * La password scritta nella pagina del link aperto altrove. I tentativi contano come quelli di accesso
-     * (per indirizzo IP e per email, prima di verificare): il link non serve a provare password all'infinito.
+     * (gli stessi contatori, prima di verificare): il link non serve a provare password all'infinito.
      * Una password vuota non è un tentativo: la pagina la chiede di nuovo (PasswordRequired).
      */
-    public function verifyWithPassword(#[SensitiveParameter] string $value, #[SensitiveParameter] string $password, string $ip): VerificationResult
+    public function verifyWithPassword(#[SensitiveParameter] string $value, #[SensitiveParameter] string $password, #[SensitiveParameter] string $ip): VerificationResult
     {
         $link = $this->open($value);
         if ($link instanceof VerificationResult) {
@@ -79,9 +79,7 @@ final readonly class EmailVerification
             return VerificationResult::passwordRequired($user, $returnTo);
         }
 
-        $perAccount = AccountThrottle::LoginPerAccount->limit();
-        $status = $this->limiter->hit(AccountThrottle::LoginPerIp->limit(), IpAddress::rateLimitSubject($ip))
-            ->and($this->limiter->hit($perAccount, $user->email->value));
+        $status = AccountThrottle::hitLogin($this->limiter, $user->email, $ip);
         if (!$status->allowed) {
             return VerificationResult::throttled($user, $returnTo, $status->retryAfter);
         }
@@ -89,7 +87,7 @@ final readonly class EmailVerification
             return VerificationResult::wrongPassword($user, $returnTo);
         }
 
-        $this->limiter->reset($perAccount, $user->email->value);
+        AccountThrottle::resetLogin($this->limiter, $user->email, $ip);
 
         return $this->confirm($record, $user);
     }
@@ -98,16 +96,22 @@ final readonly class EmailVerification
      * Un link di conferma nuovo. Parte solo per un account non ancora confermato, ma la risposta
      * è sempre la stessa: non rivela se l'email ha un account. Per questo l'email parte dopo la
      * risposta (né il tempo né un invio fallito cambiano la pagina) e il risultato è Sent o Throttled.
+     * Il tetto delle email si conta sempre, prima di cercare l'account, come nella registrazione: se
+     * contasse solo per gli account da confermare, chi lo esaurisce qui e poi si registra con la stessa
+     * email capirebbe dal tempo di risposta della registrazione se l'account c'è.
      */
-    public function resend(EmailAddress $email, ReturnPath $returnTo, string $ip): Delivery
+    public function resend(EmailAddress $email, ReturnPath $returnTo, #[SensitiveParameter] string $ip): Delivery
     {
         $ipStatus = $this->limiter->hit(AccountThrottle::EmailRequestPerIp->limit(), IpAddress::rateLimitSubject($ip));
         if (!$ipStatus->allowed) {
             return Delivery::throttled($ipStatus->retryAfter);
         }
+        if (!$this->mail->reserve($email)) {
+            return Delivery::sent();
+        }
 
         $user = $this->users->findByEmail($email);
-        if ($user !== null && !$user->isVerified() && $this->mail->reserve($email)) {
+        if ($user !== null && !$user->isVerified()) {
             $token = $this->tokens->issue($user, TokenPurpose::EmailVerification, $returnTo);
             $this->mail->sendLater($this->emails->verification($user, $token));
         }
@@ -128,7 +132,7 @@ final readonly class EmailVerification
         if ($record === null || $user === null) {
             return VerificationResult::invalid();
         }
-        // Già confermata, con questo link o in un altro modo (il link della nuova password vale come conferma).
+        // Già confermata, con questo link o in un altro modo.
         if ($user->isVerified()) {
             return VerificationResult::alreadyVerified();
         }
@@ -147,7 +151,11 @@ final readonly class EmailVerification
             return VerificationResult::alreadyVerified();
         }
 
-        $this->users->markEmailVerified($user->id, $now);
+        if (!$this->users->markEmailVerified($user, $now)) {
+            // Fra la lettura del link e la conferma una registrazione nuova ha preso il posto di quella letta
+            // (con un'altra password e un link suo): questo link non vale più.
+            return VerificationResult::invalid();
+        }
         $this->tokenRepository->deleteUnused($user->id, TokenPurpose::EmailVerification);
         $verified = $this->users->findById($user->id) ?? throw new UnexpectedValueException('Account sparito durante la conferma.');
 

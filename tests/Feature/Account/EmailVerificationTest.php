@@ -14,6 +14,7 @@ use FourStreet\Http\Response;
 use FourStreet\Tests\Support\AccountFixture;
 use FourStreet\Tests\Support\InMemoryMailer;
 use FourStreet\Tests\Support\TestBrowser;
+use FourStreet\Tests\Support\TestDatabase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -125,20 +126,47 @@ final class EmailVerificationTest extends TestCase
         $this->fixture->register($this->fixture->browser());
         $link = $this->link();
         for ($attempt = 1; $attempt <= 8; ++$attempt) {
-            self::assertSame(422, $this->confirmFrom($this->fixture->browser(sprintf('198.51.100.%d', $attempt)), $link, 'sbagliata')->status);
+            self::assertSame(422, $this->confirmFrom($this->fixture->browser('198.51.100.66'), $link, 'sbagliata')->status);
         }
 
-        // Anche con la password giusta, e da un'altra connessione: l'account aspetta, come per l'accesso.
-        $blocked = $this->confirmFrom($this->fixture->browser('198.51.100.99'), $link, AccountFixture::PASSWORD);
+        // Anche con la password giusta: da quell'indirizzo l'account aspetta, come per l'accesso.
+        $blocked = $this->confirmFrom($this->fixture->browser('198.51.100.66'), $link, AccountFixture::PASSWORD);
         self::assertSame(429, $blocked->status);
         self::assertSame('900', $blocked->header('Retry-After'));
         self::assertStringContainsString('Riprova tra 15 minuti.', $blocked->body);
         self::assertStringContainsString('<input type="hidden" name="token" value="' . self::token($link) . '">', $blocked->body);
         self::assertFalse($this->isVerified());
-        self::assertSame(429, $this->fixture->logIn($this->fixture->browser('198.51.100.98'))->status, 'Il contatore è quello degli accessi.');
+        self::assertSame(429, $this->fixture->logIn($this->fixture->browser('198.51.100.66'))->status, 'Il contatore è quello degli accessi.');
+        self::assertSame(422, $this->confirmFrom($this->fixture->browser('198.51.100.67'), $link, 'sbagliata')->status, 'Da un altro indirizzo si prova ancora.');
 
         $this->fixture->clock->travel('+15 minutes');
-        self::assertSame(303, $this->confirmFrom($this->fixture->browser('198.51.100.99'), $link, AccountFixture::PASSWORD)->status);
+        self::assertSame(303, $this->confirmFrom($this->fixture->browser('198.51.100.66'), $link, AccountFixture::PASSWORD)->status);
+    }
+
+    /**
+     * Una registrazione nuova che arriva fra l'uso del link e la conferma (due richieste quasi insieme):
+     * l'account non si conferma con la password dell'altro, e il link risponde come un link non valido.
+     */
+    public function testARegistrationThatLandsDuringTheConfirmationConfirmsNothing(): void
+    {
+        if (TestDatabase::isExternal()) {
+            self::markTestSkipped('Il trigger che fa arrivare la registrazione concorrente è scritto per SQLite.');
+        }
+        $owner = $this->fixture->browser();
+        $this->fixture->register($owner);
+        // Appena il link è usato, prima della conferma, la registrazione dell'altro sostituisce quella letta.
+        $this->fixture->database->execute(sprintf(
+            "CREATE TRIGGER registrazione_concorrente AFTER UPDATE OF used_at ON account_tokens BEGIN UPDATE users SET password_hash = '%s' WHERE id = NEW.user_id; END",
+            password_hash('la password di un altro', PASSWORD_BCRYPT, ['cost' => 4]),
+        ));
+
+        $response = $owner->get($this->link());
+
+        self::assertSame(404, $response->status);
+        self::assertStringContainsString('Link non valido.</h1>', $response->body);
+        self::assertNull($owner->cookie('__Host-session'));
+        self::assertFalse($this->isVerified());
+        self::assertSame(422, $this->fixture->logIn($this->fixture->browser('198.51.100.66'), password: 'la password di un altro')->status);
     }
 
     public function testTheLinkOfARegistrationMadeBySomeoneElseActivatesNothing(): void
@@ -297,6 +325,27 @@ final class EmailVerificationTest extends TestCase
         // Parte solo il link per l'account da confermare.
         self::assertCount($emails + 1, $this->fixture->mailer->sent);
         self::assertSame('Conferma la tua email', $this->fixture->mailer->lastTo('anna@example.com')->subject);
+    }
+
+    /**
+     * Il tetto delle email (5 l'ora per indirizzo) si consuma anche quando non c'è un account da confermare:
+     * altrimenti chi lo esaurisce qui e poi si registra con quell'email capirebbe dal tempo di risposta della
+     * registrazione (che manda subito, oppure no) se l'account c'è.
+     */
+    public function testEveryNewLinkRequestCountsInTheEmailCapEvenWithoutAnAccount(): void
+    {
+        $browser = $this->fixture->browser('198.51.100.30');
+        $browser->get('/account/verifica/nuovo-link/');
+        for ($request = 1; $request <= 5; ++$request) {
+            self::assertSame(303, $browser->post('/account/verifica/nuovo-link/', ['email' => 'nessuno@example.com'])->status);
+        }
+
+        $registered = $this->fixture->register($this->fixture->browser('198.51.100.31'), 'nessuno@example.com');
+
+        // Come per un indirizzo con l'account e il tetto esaurito: la stessa pagina, e non parte nulla.
+        self::assertSame('/account/registrati/controlla-la-posta/', $registered->header('Location'));
+        self::assertSame([], $this->fixture->mailer->sentTo('nessuno@example.com'));
+        self::assertSame(0, $this->fixture->count('users'), 'Oltre il tetto la registrazione si ferma prima di creare l\'account.');
     }
 
     public function testAFailedNewLinkLooksLikeASentOne(): void

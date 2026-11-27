@@ -28,6 +28,15 @@ DirectoryIndex index.php
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
+  # Sempre in HTTPS: una richiesta http passa a https con un redirect permanente. Dietro un proxy che parla
+  # al server in http, X-Forwarded-Proto dice che il browser è già in https: nessun redirect, nessun ciclo.
+  # Restano in http /.well-known/ (rinnovo dei certificati SSL) e il computer di chi sviluppa.
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteCond %{REQUEST_URI} !^/\.well-known/
+  RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?$ [NC]
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+
   # Cartelle nascoste: vietate. Resta aperta solo .well-known (rinnovo dei certificati SSL).
   RewriteCond %{REQUEST_URI} !^/\.well-known/
   RewriteRule (^|/)\. - [F]

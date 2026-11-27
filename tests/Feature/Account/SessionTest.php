@@ -11,9 +11,12 @@ use FourStreet\Account\Session\StartSession;
 use FourStreet\Application;
 use FourStreet\Database\Database;
 use FourStreet\Database\DatabaseConfig;
+use FourStreet\Http\Request;
 use FourStreet\Http\Response;
 use FourStreet\Tests\Support\AccountFixture;
+use FourStreet\Tests\Support\FrozenClock;
 use FourStreet\Tests\Support\InMemoryMailer;
+use FourStreet\Tests\Support\SiteFixture;
 use FourStreet\Tests\Support\TestBrowser;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -173,6 +176,17 @@ final class SessionTest extends TestCase
         self::assertNotNull($browser->cookie('session'));
         self::assertNull($browser->cookie('__Host-session'));
         self::assertSame(200, $browser->get('/account/')->status);
+    }
+
+    /**
+     * HTTPS lo decide l'origine pubblica, come per i cookie: in https le pagine chiedono al browser di restarci
+     * (HSTS), su http://localhost no; senza config/local.php l'origine è site_url.
+     */
+    public function testStrictTransportSecurityFollowsThePublicOriginLikeTheCookies(): void
+    {
+        self::assertSame('max-age=31536000', $this->browser->get('/account/')->header('Strict-Transport-Security'));
+        self::assertFalse((new AccountFixture('http://localhost:8000'))->browser()->get('/account/accedi/')->hasHeader('Strict-Transport-Security'));
+        self::assertSame('max-age=31536000', SiteFixture::application(FrozenClock::at(AccountFixture::NOW))->handle(Request::create('GET', '/links/'))->header('Strict-Transport-Security'));
     }
 
     /**

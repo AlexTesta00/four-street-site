@@ -181,7 +181,7 @@ final class AdminCommandsTest extends TestCase
         $users = new PdoUserRepository($this->database);
         $user = $users->create(new NewUser(FullName::tryFrom($name) ?? self::fail(), EmailAddress::tryFrom($email) ?? self::fail(), 'hash', FrozenClock::at('2026-11-25 08:00:00')->now(), str_repeat('0', 64)));
         if ($verified) {
-            $users->markEmailVerified($user->id, FrozenClock::at('2026-11-25 08:00:00')->now());
+            $users->markEmailVerified($user, FrozenClock::at('2026-11-25 08:00:00')->now());
         }
     }
 
