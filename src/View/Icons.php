@@ -32,6 +32,9 @@ final class Icons
         'exit' => '<path d="M14 4h6v16h-6"></path><path d="M10 8l-4 4 4 4"></path><path d="M6 12h10"></path>',
         // Il link all'area clienti.
         'user' => '<circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path>',
+        // Il giorno prima e il giorno dopo, nel pannello del titolare.
+        'previous' => '<path d="M15 5l-7 7 7 7"></path>',
+        'next' => '<path d="M9 5l7 7-7 7"></path>',
     ];
 
     /**

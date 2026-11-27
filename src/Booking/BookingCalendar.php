@@ -18,6 +18,9 @@ use FourStreet\Config\SiteConfig;
  */
 final readonly class BookingCalendar
 {
+    /** Quanti anni prima e dopo quello di oggi arriva il titolare, nel suo pannello. */
+    private const int REACH_YEARS = 10;
+
     public function __construct(
         private BookingRules $rules,
         private DateTimeZone $timezone,
@@ -45,6 +48,12 @@ final readonly class BookingCalendar
         return LocalDate::of($now, $this->timezone);
     }
 
+    /** Il giorno dell'inaugurazione: prima non ci sono fasce. */
+    public function openingDay(): LocalDate
+    {
+        return LocalDate::of($this->opening, $this->timezone);
+    }
+
     /**
      * I giorni che si prenotano adesso: da oggi a fra days_ahead giorni, ma non prima del giorno
      * dell'inaugurazione. Ci sono anche i giorni senza fasce (domenica, chiusure), per mostrarli chiusi.
@@ -56,7 +65,7 @@ final readonly class BookingCalendar
     {
         $today = $this->today($now);
         $last = $today->addDays($this->rules->daysAhead);
-        $openingDay = LocalDate::of($this->opening, $this->timezone);
+        $openingDay = $this->openingDay();
 
         $days = [];
         for ($day = $openingDay->isAfter($today) ? $openingDay : $today; !$day->isAfter($last); $day = $day->addDays(1)) {
@@ -78,6 +87,20 @@ final readonly class BookingCalendar
     public function isBeyondBookableDays(LocalDate $day, DateTimeImmutable $now): bool
     {
         return $day->isAfter($this->today($now)->addDays($this->rules->daysAhead));
+    }
+
+    /**
+     * Il giorno è a portata del titolare: dal 1° gennaio di dieci anni fa al 31 dicembre fra dieci anni. Più in là
+     * non c'è nulla da guardare né da prenotare, e così anche il giorno prima e quello dopo sono sempre giorni veri
+     * del calendario (mai un anno 0 o 10000).
+     */
+    public function isWithinReach(LocalDate $day, DateTimeImmutable $now): bool
+    {
+        $year = (int) $this->today($now)->calendarDay()->format('Y');
+        $first = LocalDate::tryFrom(sprintf('%04d-01-01', $year - self::REACH_YEARS));
+        $last = LocalDate::tryFrom(sprintf('%04d-12-31', $year + self::REACH_YEARS));
+
+        return $first !== null && $last !== null && !$day->isBefore($first) && !$day->isAfter($last);
     }
 
     /**

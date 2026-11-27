@@ -80,7 +80,8 @@ final class SchemaTest extends TestCase
         yield 'nome mancante' => ['users', [...$user, 'email' => 'c@example.com', 'full_name' => null]];
         yield 'scopo sconosciuto del link' => ['account_tokens', ['token_hash' => str_repeat('a', 64), 'user_id' => 0, 'purpose' => 'magic_link', 'created_at' => '2026-11-25 07:00:00', 'expires_at' => '2026-11-27 07:00:00']];
 
-        $booking = ['user_id' => 0, 'slot_date' => '2026-12-07', 'slot_time' => '18:30', 'starts_at' => '2026-12-07 17:30:00', 'seat' => 1, 'active' => 1, 'created_at' => '2026-11-25 07:00:00'];
+        $booking = ['user_id' => 0, 'slot_date' => '2026-12-07', 'slot_time' => '18:30', 'starts_at' => '2026-12-07 17:30:00', 'seat' => 1, 'active' => 1, 'created_at' => '2026-11-25 07:00:00', 'created_by' => 'customer'];
+        $guest = [...$booking, 'user_id' => null, 'guest_name' => 'Ospite Prova', 'created_by' => 'admin'];
         $cancelled = ['seat' => null, 'active' => null, 'cancelled_at' => '2026-11-25 08:00:00', 'cancelled_by' => 'customer'];
         yield 'posto zero' => ['bookings', [...$booking, 'seat' => 0]];
         yield 'attiva vale solo 1' => ['bookings', [...$booking, 'active' => 2]];
@@ -93,6 +94,13 @@ final class SchemaTest extends TestCase
         yield 'posto senza active né disdetta' => ['bookings', [...$booking, 'active' => null]];
         yield 'giorno mancante' => ['bookings', [...$booking, 'slot_date' => null]];
         yield 'cliente inesistente' => ['bookings', [...$booking, 'user_id' => 999_999]];
+        yield 'senza chi l\'ha inserita' => ['bookings', [...$booking, 'created_by' => null]];
+        yield 'inserita da uno sconosciuto' => ['bookings', [...$booking, 'created_by' => 'robot']];
+        yield 'cliente e persona senza account insieme' => ['bookings', [...$booking, 'guest_name' => 'Ospite Prova']];
+        yield 'né cliente né persona senza account' => ['bookings', [...$booking, 'user_id' => null]];
+        yield 'persona senza account inserita da un cliente' => ['bookings', [...$guest, 'created_by' => 'customer']];
+        yield 'nome di una lettera' => ['bookings', [...$guest, 'guest_name' => 'O']];
+        yield 'nome troppo lungo' => ['bookings', [...$guest, 'guest_name' => str_repeat('o', 101)]];
     }
 
     /**
@@ -110,6 +118,19 @@ final class SchemaTest extends TestCase
         $this->expectException(PDOException::class);
 
         $this->insert($table, $row);
+    }
+
+    public function testTheValidRowsNextToTheRejectedOnesAreAccepted(): void
+    {
+        $this->insert('users', ['full_name' => 'A', 'email' => 'a@example.test', 'password_hash' => 'h', 'privacy_accepted_at' => '2026-11-25 07:00:00', 'role' => 'admin', 'created_at' => '2026-11-25 07:00:00', 'updated_at' => '2026-11-25 07:00:00']);
+        $booking = ['slot_date' => '2026-12-07', 'slot_time' => '18:30', 'starts_at' => '2026-12-07 17:30:00', 'active' => 1, 'created_at' => '2026-11-25 07:00:00'];
+
+        // Un cliente, inserito da lui o dalla palestra; una persona senza account, solo dalla palestra, con un nome di 2-100 caratteri.
+        $this->insert('bookings', [...$booking, 'user_id' => $this->database->lastInsertId(), 'seat' => 1, 'created_by' => 'admin']);
+        $this->insert('bookings', [...$booking, 'user_id' => null, 'guest_name' => 'Lu', 'seat' => 2, 'created_by' => 'admin']);
+        $this->insert('bookings', [...$booking, 'user_id' => null, 'guest_name' => str_repeat('o', 100), 'seat' => 3, 'created_by' => 'admin']);
+
+        self::assertSame(3, $this->database->fetchOne('SELECT COUNT(*) AS total FROM bookings')?->int('total'));
     }
 
     public function testEmailsCompareExactly(): void

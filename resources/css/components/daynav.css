@@ -1,0 +1,22 @@
+/* ---------- Giorno prima e giorno dopo ----------
+   Nel pannello del titolare: due bottoni ai lati, con il giorno abbreviato ("gio 26") e la freccia, e in mezzo
+   "Oggi" quando si guarda un altro giorno. Margini interni stretti: anche a 320px stanno su una riga. */
+
+@layer components {
+  .fs-daynav {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 8px;
+  }
+  .fs-daynav > .fs-btn {
+    gap: 6px;
+    padding: 0 10px;
+    white-space: nowrap;
+  }
+  .fs-daynav__today {
+    grid-column: 2;
+  }
+  .fs-daynav__step--next {
+    grid-column: 3;
+  }
+}

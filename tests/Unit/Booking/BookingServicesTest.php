@@ -21,6 +21,7 @@ use FourStreet\Booking\BookingThrottle;
 use FourStreet\Booking\CancellationResult;
 use FourStreet\Booking\CancellationStatus;
 use FourStreet\Booking\CancelledBy;
+use FourStreet\Booking\CreatedBy;
 use FourStreet\Booking\EmailDelivery;
 use FourStreet\Booking\LocalDate;
 use FourStreet\Booking\PdoBookingRepository;
@@ -377,7 +378,7 @@ final class BookingServicesTest extends TestCase
     {
         $slot = BookingCalendar::forSite($this->site)->slot(self::day($date), self::time($time)) ?? self::fail();
 
-        return $this->bookings->place($customer->id, $slot, 5, null, $this->clock->now())->booking()->id;
+        return $this->bookings->place($customer->id, $slot, 5, null, $this->clock->now(), CreatedBy::Customer)->booking()->id;
     }
 
     private function bookingCount(): int

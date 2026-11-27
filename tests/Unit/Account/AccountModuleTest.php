@@ -7,6 +7,7 @@ namespace FourStreet\Tests\Unit\Account;
 use FourStreet\Account\AccountGuards;
 use FourStreet\Account\AccountModule;
 use FourStreet\Account\LoginResult;
+use FourStreet\Account\Session\RequireAdmin;
 use FourStreet\Account\Session\RequireLogin;
 use FourStreet\Account\Session\StartSession;
 use FourStreet\Account\Session\Visitor;
@@ -60,6 +61,7 @@ final class AccountModuleTest extends TestCase
         self::assertSame([PrivatePage::class, CsrfProtection::class, StartSession::class], array_map(get_class(...), $guards->page()));
         self::assertSame([PrivatePage::class, CsrfProtection::class, StartSession::class, RequireLogin::class], array_map(get_class(...), $guards->member()));
         self::assertSame([NoReferrer::class, PrivatePage::class, CsrfProtection::class, StartSession::class], array_map(get_class(...), $guards->tokenPage()));
+        self::assertSame([PrivatePage::class, CsrfProtection::class, StartSession::class, RequireLogin::class, RequireAdmin::class], array_map(get_class(...), $guards->admin()));
     }
 
     public function testVisitorsAndResultsRefuseImpossibleQuestions(): void
@@ -95,6 +97,7 @@ final class AccountModuleTest extends TestCase
             $fixture->reporter,
             new Outbox($fixture->mailer, $fixture->reporter),
             new StubController(),
+            new StubController('pagina non trovata'),
         );
     }
 

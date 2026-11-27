@@ -75,7 +75,7 @@ final readonly class SlotBooking
         }
 
         $rules = $this->calendar->rules();
-        $result = $this->bookings->place($customer->id, $slot, $rules->capacity, $rules->maxUpcoming, $now);
+        $result = $this->bookings->place($customer->id, $slot, $rules->capacity, $rules->maxUpcoming, $now, CreatedBy::Customer);
         if ($result->status !== BookingStatus::Booked) {
             return $result;
         }

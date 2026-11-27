@@ -1,0 +1,150 @@
+/* ---------- Pannello del titolare: le fasce del giorno ----------
+   Una scheda per fascia, pensata per il telefono in palestra: l'orario grande in Bodoni e, a destra, i posti
+   presi (i quadrati e "3/5"); sotto, chi c'è, dal posto 1. Ogni persona è una riga: il posto in un quadrato,
+   il nome grande e "Disdici" sulla stessa riga; sotto, largo fino al bordo, l'email o "Senza account": un
+   indirizzo lungo va a capo senza schiacciare il nome. In fondo "Aggiungi", largo quanto la scheda.
+   La fascia in corso ha il filetto oro; quella finita si fa da parte, senza fondo. */
+
+@layer components {
+  .fs-roster-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  /* A 320px margini interni stretti: orario e posti stanno sulla stessa riga */
+  .fs-roster {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+    padding: 12px;
+    background: var(--color-panel);
+    border: 1px solid var(--color-hairline-strong);
+    box-shadow: var(--edge);
+  }
+  .fs-roster--now {
+    border-color: var(--color-accent-line);
+  }
+  .fs-roster--over {
+    background: transparent;
+    border-color: var(--color-hairline);
+    box-shadow: none;
+  }
+  .fs-roster__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+  }
+  .fs-roster__time {
+    color: var(--color-fg);
+    font-family: var(--font-display);
+    font-size: 32px;
+    line-height: 36px;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  .fs-roster--over .fs-roster__time {
+    color: var(--color-fg-muted);
+  }
+  .fs-roster__fill {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  /* "3/5": largo sempre uguale, così i quadrati delle schede stanno in colonna */
+  .fs-roster__count {
+    min-width: 2em;
+    color: var(--color-fg);
+    font-size: 18px;
+    line-height: 24px;
+    font-weight: 600;
+    font-variant-numeric: lining-nums tabular-nums;
+    text-align: right;
+  }
+  .fs-roster__state {
+    display: flex;
+    margin-top: -4px;
+  }
+  .fs-roster__empty {
+    color: var(--color-fg-subtle);
+    font-size: 16px;
+    line-height: 24px;
+  }
+  .fs-roster__people {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--color-hairline);
+  }
+  .fs-roster__person {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "seat name action"
+      "seat meta meta";
+    align-items: center;
+    column-gap: 12px;
+    row-gap: 2px;
+    min-height: 64px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--color-hairline);
+  }
+  .fs-roster__seat {
+    grid-area: seat;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--color-control);
+    color: var(--color-fg-muted);
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 600;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  .fs-roster__name {
+    grid-area: name;
+    min-width: 0;
+    color: var(--color-fg);
+    font-size: 18px;
+    line-height: 24px;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+  .fs-roster__meta {
+    grid-area: meta;
+    min-width: 0;
+    color: var(--color-fg-muted);
+    font-size: 14px;
+    line-height: 20px;
+    overflow-wrap: anywhere;
+  }
+  /* Il bottone fantasma si allinea al bordo della scheda: il suo margine interno sporge a destra */
+  .fs-roster__action {
+    grid-area: action;
+    margin-right: -8px;
+  }
+
+  @media (min-width: 360px) {
+    .fs-roster {
+      padding: 16px;
+    }
+    .fs-roster__time {
+      font-size: 36px;
+      line-height: 40px;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .fs-roster {
+      padding: 20px;
+    }
+    .fs-roster__time {
+      font-size: 40px;
+      line-height: 44px;
+    }
+  }
+}

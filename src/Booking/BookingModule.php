@@ -42,8 +42,9 @@ use FourStreet\View\View;
  * Con booking.online a false le pagine per prenotare rispondono "Prenotazioni presto"; la disdetta
  * e l'elenco nell'account restano, per le prenotazioni già fatte.
  *
- * I servizi di dominio (SlotBooking, BookingCancellation, SlotBoard, BookingRepository) non sanno nulla
- * di HTTP: la pagina del titolare li userà così come sono.
+ * I servizi di dominio (SlotBooking, BookingCancellation, SlotBoard, BookingRepository e, per il titolare,
+ * Staff\StaffBooking, Staff\StaffCancellation, Staff\DayRoster) non sanno nulla di HTTP: il pannello del titolare
+ * (FourStreet\Admin) li compone con le sue pagine.
  */
 final readonly class BookingModule implements RouteProvider
 {

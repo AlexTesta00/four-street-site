@@ -14,11 +14,12 @@ use FourStreet\View\Template;
  * @var Template $view
  * @var Slot $slot
  * @var int|null $mine il posto del cliente, se ne ha uno in questa fascia
+ * @var bool|null $medium facoltativo: quadrati più grandi, da leggere a colpo d'occhio (il pannello del titolare)
  */
 
 $next = $mine === null ? $slot->nextSeat() : null;
 ?>
-<span class="fs-seats" aria-hidden="true">
+<span class="fs-seats<?= ($medium ?? false) ? ' fs-seats--md' : '' ?>" aria-hidden="true">
 <?php for ($seat = 1; $seat <= $slot->capacity; ++$seat): ?>
       <span class="fs-seat<?= match (true) {
           $seat === $mine => ' fs-seat--mine',

@@ -2,13 +2,14 @@
 
 Sito di 4Street, palestra a San Marino: [fourstreet.studio](https://fourstreet.studio).
 
-Oggi il sito ha tre indirizzi pubblici, l'area clienti e la prenotazione delle fasce:
+Oggi il sito ha tre indirizzi pubblici, l'area clienti, la prenotazione delle fasce e il pannello del titolare:
 
 - `/`: la landing. La regola dei cinque posti per fascia oraria, come si prenota (con le fasce vere del primo giorno con un posto libero, quando le prenotazioni sono attive), lo spazio, dove siamo con la mappa illustrata, le domande frequenti e l'invito a venire. Su mobile e tablet una barra in fondo allo schermo tiene a portata "Vieni a trovarci" e WhatsApp. Fino all'inaugurazione la pagina ha il conto alla rovescia; allo zero passa allo stato "aperti" senza ricaricare, e dal giorno dell'apertura il server la scrive già così. Per provare gli stati: `/?anteprima=mappa` (la pagina come se fossimo aperti) e `/?anteprima=zero` (il conto arriva a zero dopo 12 secondi).
 - `/links/`: la pagina dei link.
 - `/calendario.php`: l'evento dell'inaugurazione da aggiungere al calendario (file `.ics`).
 - `/account/…`: l'area clienti, cioè registrazione con email confermata, accesso, password dimenticata e pagina dell'account con le prenotazioni (vedi [Area clienti](#area-clienti)). La landing la collega con un link fisso ("Area clienti"), uguale per tutti.
 - `/prenota/…`: la scelta del giorno e della fascia, il riepilogo e la conferma; la disdetta sta nell'account (vedi [Prenotazioni](#prenotazioni)).
+- `/gestione/…`: il pannello del titolare, solo per lui: chi è prenotato e in che fascia, e da lì una prenotazione nuova o una disdetta (vedi [Pannello del titolare](#pannello-del-titolare)). Nessuna pagina pubblica lo collega.
 
 Stack: HTML, Tailwind CSS, JavaScript e PHP, senza framework. Produzione: hosting condiviso Hostinger, PHP 8.3, Apache/LiteSpeed con `.htaccess`, deploy via FTPS in `public_html`.
 
@@ -105,7 +106,7 @@ Giorni e orari delle fasce sono ora di San Marino (`timezone`). Una fascia è un
 
 ### Posti e gare
 
-La capienza la garantisce il database, non un conteggio. Ogni prenotazione attiva ha un posto da 1 a `capacity`, con un vincolo `UNIQUE (giorno, orario, posto)`: chi prenota prende il primo posto libero; se due richieste scelgono insieme lo stesso, il database ne fa passare una e l'altra riprova con il successivo, in una transazione nuova; finiti i posti, "fascia completa". Una prenotazione disdetta libera il posto (`seat` e `active` a NULL: i NULL non si scontrano nei vincoli UNIQUE, né su SQLite né su MySQL) e resta come storico. Allo stesso modo `UNIQUE (cliente, giorno, active)` tiene una sola prenotazione attiva per cliente al giorno. Il controllo "al massimo `max_upcoming` future" vale anche con due richieste insieme: la prenotazione blocca prima la riga del cliente in `users`, così le sue prenotazioni passano una alla volta.
+La capienza la garantisce il database, non un conteggio. Ogni prenotazione attiva ha un posto da 1 a `capacity`, con un vincolo `UNIQUE (giorno, orario, posto)`: chi prenota prende il primo posto libero; se due richieste scelgono insieme lo stesso, il database ne fa passare una e l'altra riprova con il successivo, in una transazione nuova; finiti i posti, "fascia completa". Una prenotazione disdetta libera il posto (`seat` e `active` a NULL: i NULL non si scontrano nei vincoli UNIQUE, né su SQLite né su MySQL) e resta come storico. Allo stesso modo `UNIQUE (cliente, giorno, active)` tiene una sola prenotazione attiva per cliente al giorno. Il controllo "al massimo `max_upcoming` future" vale anche con due richieste insieme: la prenotazione blocca prima la riga del cliente in `users`, così le sue prenotazioni passano una alla volta. Una persona senza account, inserita dal titolare, blocca allo stesso modo la riga del titolare: lo stesso modulo inviato due volte trova la prima prenotazione, e in ogni caso `UNIQUE (fascia, guest_name, active)` non ne lascia scrivere una seconda.
 
 Abbassare `capacity` non cancella nessuna prenotazione: una fascia con più prenotazioni dei posti nuovi resta piena finché non se ne liberano.
 
@@ -123,11 +124,13 @@ Una connessione a MySQL che non risponde rinuncia dopo 5 secondi, così un datab
 
 ### La tabella `bookings`
 
-`id`, `user_id` (il cliente; cancellato l'account, se ne vanno anche le sue prenotazioni), `slot_date` e `slot_time` (la fascia, ora di San Marino), `starts_at` (lo stesso inizio in UTC, per i confronti con adesso), `seat` (il posto, NULL se disdetta), `active` (1, NULL se disdetta), `created_at`, `cancelled_at` e `cancelled_by` (`customer` oppure `admin`). Vincoli: `UNIQUE (slot_date, slot_time, seat)`, `UNIQUE (user_id, slot_date, active)` e i `CHECK` che tengono coerenti posto, stato e disdetta.
+`id`, `user_id` (il cliente registrato; cancellato l'account, se ne vanno anche le sue prenotazioni), `guest_name` (il nome di una persona senza account, scritto dal titolare: da 2 a 100 caratteri), `slot_date` e `slot_time` (la fascia, ora di San Marino), `starts_at` (lo stesso inizio in UTC, per i confronti con adesso), `seat` (il posto, NULL se disdetta), `active` (1, NULL se disdetta), `created_at` e `created_by` (chi l'ha inserita: `customer` oppure `admin`), `cancelled_at` e `cancelled_by` (`customer` oppure `admin`). Vincoli: `UNIQUE (slot_date, slot_time, seat)`, `UNIQUE (user_id, slot_date, active)`, `UNIQUE (slot_date, slot_time, guest_name, active)` (la stessa persona senza account una volta per fascia: il nome si confronta esatto, già normalizzato negli spazi) e i `CHECK` che tengono coerenti posto, stato e disdetta, e la persona: esattamente uno fra `user_id` e `guest_name`, e una persona senza account la inserisce solo `admin`.
+
+La migrazione `0005_create_bookings` è stata corretta sul posto nello Sprint 3 (persona senza account e `created_by`), perché non era mai stata applicata a un database vero: su `main` non era arrivata e non c'era stato nessun deploy. Chi ha un database di sviluppo dello Sprint 2 lo ricrea: cancella `var/4street.sqlite` e lancia `npm run migrate`. Da qui in avanti ogni cambio di schema è una migrazione nuova.
 
 ### Privacy
 
-Una prenotazione dice chi si allena in palestra, quando: è un dato personale. Nella tabella ci sono solo il riferimento all'account, la fascia, il posto e gli istanti di prenotazione e disdetta; niente indirizzi IP (i limiti dei tentativi ne tengono solo l'impronta con chiave, e la cancellano alla scadenza). Le prenotazioni restano come storico anche dopo la fascia o la disdetta, finché non si cancella l'account: quanto tenerle (per esempio un anno) e come dirlo nell'informativa va deciso con il titolare. Le vede solo il cliente, nel suo account; la pagina del titolare arriverà con lo Sprint 3.
+Una prenotazione dice chi si allena in palestra, quando: è un dato personale. Nella tabella ci sono solo il riferimento all'account (o, per chi non ce l'ha, il nome scritto dal titolare), la fascia, il posto, chi l'ha inserita e gli istanti di prenotazione e disdetta; niente indirizzi IP (i limiti dei tentativi ne tengono solo l'impronta con chiave, e la cancellano alla scadenza). Le prenotazioni restano come storico anche dopo la fascia o la disdetta, finché non si cancella l'account: quanto tenerle (per esempio un anno), comprese quelle con il solo nome, e come dirlo nell'informativa va deciso con il titolare. Le vede il cliente, nel suo account, e il titolare nel suo pannello, con il nome e l'email: nomi ed email non compaiono mai in pagine pubbliche né negli indirizzi (dopo un redirect il pannello porta solo il numero della prenotazione), e gli errori che il sito scrive nel log non li ripetono (il testo di un server di posta che rifiuta un'email, riportato nel log, può però citare il destinatario).
 
 ### Da confermare con il titolare
 
@@ -147,12 +150,70 @@ src/Booking/            prenotazioni: regole, calendario, prenotazione e disdett
   BookingCancellation   cancellable() e cancel(): la disdetta del cliente
   SlotBoard, BookingAgenda  le fasce con i posti (pagina /prenota/, landing) e le prenotazioni di un cliente
   BookingRepository     l'interfaccia; PdoBookingRepository la implementa (SQLite e MySQL/MariaDB)
+  Booking, RosterEntry  una prenotazione (di un cliente o di una persona senza account, CreatedBy) e la stessa con la persona
+  Staff/                le regole del titolare, senza HTTP: StaffBooking, StaffCancellation, DayRoster (il giorno con chi c'è)
   Http/                 controller, avvisi dell'account, la sezione "Le tue prenotazioni" (DashboardSection)
   Landing/              le fasce della landing: vere, solo orari, esempi, e il guscio che le protegge
   BookingModule.php     collega tutto; dà ad Application rotte, sezione dell'account e fasce della landing
 ```
 
 L'area clienti non conosce le prenotazioni: mette in pagina le `DashboardSection` che riceve (`AccountModule::create()`).
+
+## Pannello del titolare
+
+Il titolare della palestra vede chi si è prenotato e in che fascia e, da lì, disdice o crea una prenotazione. Niente di più: orari, regole e capienza restano in `config/site.php`, i ruoli nella console. Le pagine sono pensate per il telefono in palestra (da 320px, orario grande, posti a colpo d'occhio, nomi leggibili, bottoni alti almeno 44px), usano il layout dell'area clienti e funzionano senza JavaScript: lo script blocca solo il doppio invio e porta il focus sul riepilogo degli errori.
+
+| Indirizzo                                             | Cosa fa                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/gestione/`, `/gestione/?giorno=AAAA-MM-GG`          | il giorno: una scheda per fascia con l'orario, i posti presi su 5 e chi c'è (posto, nome, email se ha l'account, "inserita dalla palestra"); "Disdici" su ogni prenotazione e "Aggiungi" sulle fasce con un posto, finché la fascia non è iniziata. Il giorno prima e quello dopo (senza limiti, anche nel passato, da guardare soltanto), "Oggi" e la scelta rapida dei giorni prenotabili come in `/prenota/`, dentro un `details` chiuso |
+| `/gestione/prenotazioni/nuova/?giorno=…&fascia=HH:MM` | GET il modulo, per chi è il posto: l'email di un cliente registrato oppure il nome di chi non ha l'account, uno solo dei due; POST prenota e torna al giorno con l'avviso (303)                                                                                                                                                                                                                                                             |
+| `/gestione/prenotazioni/{id}/disdici/`                | GET chiede conferma (chi, quando, se gli arriva un'email); POST disdice e torna al giorno con l'avviso (303)                                                                                                                                                                                                                                                                                                                                |
+
+Senza giorno il pannello apre oggi, oppure, se oggi non ha fasce (prima dell'inaugurazione, la domenica), il primo giorno prenotabile che ne ha. La scelta rapida sta chiusa perché sul telefono le fasce del giorno restino nel primo schermo. Il pannello arriva a dieci anni prima e dopo quello di oggi (dal 1° gennaio al 31 dicembre): oltre, la pagina non c'è (404), e il titolare non prenota.
+
+Chi entra:
+
+- Solo il ruolo `admin` (`AccountGuards::admin()`). Un ospite passa dalla pagina di accesso e torna dove voleva andare; chi è entrato senza essere titolare riceve la stessa pagina 404 di un indirizzo che non esiste (stesso codice e stesso contenuto; le intestazioni di una pagina privata, come `no-store`, restano). Che il pannello esista non è un segreto: la repo è pubblica, e un ospite viene mandato alla pagina di accesso; non escono dati. Il ruolo si rilegge a ogni pagina: tolto, vale dalla pagina successiva.
+- Dopo l'accesso, senza `ritorno`, il titolare arriva su `/gestione/`; nella pagina del suo account c'è il link "Gestione prenotazioni". Nessuna pagina pubblica né di un cliente collega il pannello.
+- Pagine `no-store` e `noindex`, moduli con il token CSRF, come l'area clienti. Senza `config/local.php` rispondono "Arriva presto" (503), come il resto dell'area clienti. Il pannello funziona anche con `booking.online` a `false`.
+
+Le regole del titolare (`src/Booking/Staff/`, senza HTTP):
+
+- I posti valgono anche per lui: la prenotazione passa dallo stesso `place()` del cliente (o dal suo gemello `placeGuest()`), con lo stesso vincolo del database.
+- Prenota qualsiasi fascia che esiste nel calendario e non è ancora iniziata, anche oltre `days_ahead` e senza `booking_closes_minutes_before`; mai prima dell'inaugurazione né nei giorni chiusi, dove le fasce non esistono.
+- Per un cliente registrato resta una prenotazione attiva al giorno; `max_upcoming` non vale.
+- Disdice qualsiasi prenotazione attiva non ancora iniziata, senza `cancel_closes_minutes_before`.
+- Un cliente registrato si cerca per email esatta, solo se l'ha confermata. Gli arriva subito la stessa conferma con il file `.ics` (e la prenotazione è nel suo account); se la palestra la disdice, un'email con un testo suo ("la palestra ha disdetto…", senza "se non sei stato tu", con il link per un'altra fascia e il WhatsApp). Una persona senza account non riceve nulla: la avvisa il titolare. Un'email che non parte non annulla nulla, e l'avviso del pannello lo dice.
+- Lo stesso modulo inviato due volte non scrive due prenotazioni. Per un cliente c'è "una al giorno"; per una persona senza account lo stesso nome nella stessa fascia (spazi a parte, maiuscole comprese) è la stessa persona, "già inserita", garantito anche dal database. Due persone diverse con lo stesso nome nella stessa fascia si distinguono con l'iniziale del cognome.
+- Limite dei tentativi: 60 prenotazioni e disdette ogni 15 minuti per titolare, con un contatore suo. Largo: ferma solo un uso fuori misura. Si conta prima di ogni controllo, compresa la ricerca dell'email: oltre il limite un'email nota e una sconosciuta hanno la stessa risposta, così il pannello non serve a scoprire chi ha un account. Non contano solo i moduli scritti male (campi vuoti, un'email senza chiocciola), che non leggono il database.
+- Se il titolare inserisce un cliente quando per lui la disdetta è già chiusa (`cancel_closes_minutes_before`), la conferma non gli promette una disdetta: gli dice di avvisare la palestra.
+- Una prenotazione in una fascia che l'orario non ha più (orario cambiato dopo) resta visibile nella sua fascia, "Fuori dall'orario": si disdice, ma lì non si aggiunge nessuno.
+
+Gli esiti: email sconosciuta o non confermata e modulo sbagliato 422, cliente già prenotato quel giorno 409 (si torna nel modulo, con l'errore sul campo); fascia piena o iniziata 409, inesistente o parametri manomessi 404 (una pagina con il bottone per tornare al giorno); troppi tentativi 429 con `Retry-After`; modulo senza token CSRF 403. Dopo un redirect l'avviso porta nell'indirizzo solo il numero della prenotazione: nome e fascia li legge la pagina dal database.
+
+### Dare il ruolo al titolare
+
+Dalla console, mai da una pagina web, e solo a un account che esiste già con l'email confermata: il titolare si registra dal sito come un cliente, conferma l'email, poi
+
+```sh
+php bin/console admin:grant <email>    # dà il ruolo; rilanciato non cambia nulla
+php bin/console admin:list             # i titolari
+php bin/console admin:revoke <email>   # lo toglie e chiude le sue sessioni su ogni dispositivo
+```
+
+Sul server lo stesso comando, da `public_html`: `php _app/bin/console admin:grant <email>` (vedi [Prima di andare online](#prima-di-andare-online)).
+
+### Moduli del pannello
+
+```text
+src/Admin/                 il pannello: solo HTTP, le regole stanno in src/Booking/Staff/
+  AdminUrls                gli indirizzi (mai un nome né un'email: dopo un redirect solo il numero della prenotazione)
+  Form/StaffBookingForm    il modulo con i due campi alternativi
+  Http/                    il giorno (RosterController), la prenotazione nuova, la disdetta, gli avvisi, il link nell'account
+  AdminModule.php          collega tutto; dà ad Application le rotte e il link nella pagina dell'account
+src/Booking/Staff/         StaffBooking, StaffCancellation, StaffThrottle, DayRoster (il giorno con le sue fasce)
+src/Account/AdminRoles     dare e togliere il ruolo (i comandi admin:grant, admin:revoke, admin:list)
+```
 
 ## Area clienti
 
@@ -216,15 +277,18 @@ SQLite in sviluppo e nei test, MySQL 8 o MariaDB 10.6+ in produzione: lo stesso 
 Le migrazioni stanno in `database/migrations/`, una per file, con il nome `NNNN_descrizione.php`, e si applicano in ordine di nome una volta sola: la tabella `schema_migrations` tiene il registro. Su SQLite ogni migrazione è una transazione; su MySQL lo schema non è transazionale, quindi ogni istruzione è scritta per poter girare di nuovo (`CREATE TABLE IF NOT EXISTS`, indici dentro `CREATE TABLE`).
 
 ```sh
-php bin/console                  # l'elenco dei comandi
-php bin/console migrate          # applica le migrazioni che mancano (anche: npm run migrate, composer migrate)
-php bin/console migrate:status   # quali sono applicate e quali no
-php bin/console prune            # cancella sessioni, link e contatori scaduti
+php bin/console                       # l'elenco dei comandi
+php bin/console migrate               # applica le migrazioni che mancano (anche: npm run migrate, composer migrate)
+php bin/console migrate:status        # quali sono applicate e quali no
+php bin/console prune                 # cancella sessioni, link e contatori scaduti
+php bin/console admin:grant <email>   # dà il ruolo di titolare (vedi Pannello del titolare)
+php bin/console admin:revoke <email>  # lo toglie e chiude le sessioni dell'account
+php bin/console admin:list            # i titolari
 ```
 
-In sviluppo, prima di provare l'area clienti: `npm run migrate` (crea `var/4street.sqlite`).
+In sviluppo, prima di provare l'area clienti: `npm run migrate` (crea `var/4street.sqlite`). Un database di sviluppo creato prima dello Sprint 3 va ricreato: la migrazione `0005` è cambiata sul posto (vedi [la tabella](#la-tabella-bookings)).
 
-Tabelle: `users` (account; email unica e già in minuscolo; ruolo `customer` o `admin`), `sessions`, `account_tokens` (link delle email), `rate_limits` (contatori dei tentativi), `bookings` (prenotazioni, vedi [la tabella](#la-tabella-bookings)).
+Tabelle: `users` (account; email unica e già in minuscolo; ruolo `customer` o `admin`, che si dà con `admin:grant`), `sessions`, `account_tokens` (link delle email), `rate_limits` (contatori dei tentativi), `bookings` (prenotazioni, vedi [la tabella](#la-tabella-bookings)).
 
 ## Posta
 
@@ -238,12 +302,14 @@ Ogni email è un messaggio multipart testo + HTML, da due template in `templates
 ## Moduli e punti d'aggancio
 
 ```text
-src/Account/          area clienti: utenti, registrazione, conferma, accesso, nuova password, email
+src/Account/          area clienti: utenti, registrazione, conferma, accesso, nuova password, email, ruolo di titolare
   Http/               controller e rendering delle pagine
   Form/               moduli e loro validazione
-  Session/            sessioni sul database, Visitor, middleware StartSession e RequireLogin
+  Session/            sessioni sul database, Visitor, middleware StartSession, RequireLogin e RequireAdmin
   Token/              link monouso delle email
   AccountModule.php   collega servizi, controller e rotte; espone guards() e sessions() agli altri moduli
+src/Admin/            il pannello del titolare (vedi Pannello del titolare)
+src/Booking/          le prenotazioni (vedi Moduli, sotto Prenotazioni)
 src/Config/           SiteConfig (config/site.php), LocalConfig (config/local.php), Environment
 src/Console/          bin/console e i suoi comandi
 src/Database/         Database (PDO pigro), DatabaseConfig, Row, UtcDateTime, Migration/
@@ -256,20 +322,21 @@ src/Backend.php       database, posta, password e impostazioni locali, passati a
 `Application::create()` resta l'unico punto in cui le dipendenze si collegano: ogni modulo porta le sue rotte già pronte (le prenotazioni sono costruite così, in `BookingModule`). Per i moduli che verranno:
 
 - **Una rotta riservata a chi ha fatto l'accesso**: `Route::form('/prenota/', $controller)->through(...$accountModule->guards()->member())`. `guards()->page()` dà le stesse protezioni (no-store, CSRF, visitatore riconosciuto) senza obbligare all'accesso; `guards()->tokenPage()` aggiunge `Referrer-Policy: no-referrer`.
+- **Una rotta solo per il titolare**: `->through(...$accountModule->guards()->admin())`: come `member()`, e per chi non è titolare la pagina 404 degli indirizzi che non esistono (quella che `Application` passa ad `AccountModule::create()`).
+- **Dove va il titolare dopo l'accesso**: l'ultimo argomento di `AccountModule::create()` (oggi `AdminUrls::HOME`); senza, all'account come tutti.
 - **L'utente corrente**: `Visitor::of($request)->user` (null per un ospite), oppure `Visitor::of($request)->user()` nelle rotte con `member()`.
 - **Il token CSRF per un modulo**: `CsrfToken::of($request)->value`, nel partial `partials/form/hidden`.
 - **La destinazione dopo l'accesso**: `AccountUrls::to(AccountUrls::LOGIN, ReturnPath::fromInput('/prenota/…'))`; `RequireLogin` la mette da solo quando rimanda alla pagina di accesso.
 - **Una sezione nella pagina dell'account**: una classe che implementa `FourStreet\Account\Http\DashboardSection`, passata ad `AccountModule::create()` (come "Le tue prenotazioni").
 - **Un'email con un allegato**: `$mailTemplates->message($user->mailbox(), 'Oggetto', 'nome-template', $dati)->withAttachment(new Attachment('prenotazione.ics', 'text/calendar; charset=utf-8; method=PUBLISH', $ics))`, poi `$backend->mailer->send($message)`, che lancia `MailNotSent` se non parte; oppure `$outbox->queue($message)` (la `Outbox` che `Application::create()` passa ai moduli) per mandarla dopo la risposta, quando la pagina non deve aspettare né dire se è partita. `$user->mailbox()` mette il nome solo a email confermata.
 - **Una migrazione**: un file nuovo in `database/migrations/` (per esempio `0006_….php`) che restituisce un oggetto `Migration` con le istruzioni per SQLite e per MySQL, come le altre.
-- **Un comando**: una classe che implementa `FourStreet\Console\Command` e una riga in `ConsoleApplication::create()`.
+- **Un comando**: una classe che implementa `FourStreet\Console\Command` e una riga in `ConsoleApplication::create()` (più il suo nome in `DATABASE_COMMANDS`, se usa il database).
 
-Per la pagina del titolare (Sprint 3), dalle prenotazioni:
+Dalle prenotazioni, per altre pagine della palestra:
 
-- **Chi è prenotato in una fascia**: `BookingRepository::occupancy()` dà i posti presi; per i nomi serve un metodo nuovo che legga le prenotazioni attive di una fascia con il loro cliente (una lettura con `JOIN users`).
-- **Disdire per un cliente**: `BookingRepository::cancel($id, $adesso, CancelledBy::Admin)`; l'email si manda con `BookingNotifier::cancelled()` (il testo oggi parla di una disdetta fatta dal cliente: va adattato).
-- **Prenotare per un cliente**: `BookingRepository::place($idCliente, $fascia, $posti, null, $adesso)` (null: senza il limite delle prenotazioni future) con la fascia di `BookingCalendar::slot()`; poi `BookingNotifier::booked()`. Le regole di `SlotBooking` (finestre, limite dei tentativi) valgono per i clienti; per il titolare si sceglie quali tenere.
-- **Il calendario delle fasce**: `BookingCalendar` (`days()`, `slotsOn()`, `seating()`) e `SlotBoard` sono già senza HTTP.
+- **Chi è prenotato in un giorno**: `BookingRepository::roster($giorno)`, una lettura sola con `JOIN users` (nome ed email dei clienti, il nome di chi non ha l'account); `DayRoster` la mette nelle fasce del calendario, con cosa si può ancora fare.
+- **Prenotare e disdire per la palestra**: `StaffBooking` (`check()`, `bookCustomer()` con l'email, `bookGuest()` con il nome) e `StaffCancellation` (`cancellable()`, `cancel()`), con le regole del titolare, il limite dei tentativi e le email. Sotto, `BookingRepository::place(…, CreatedBy::Admin)` e `placeGuest()`.
+- **Il calendario delle fasce**: `BookingCalendar` (`days()`, `slotsOn()`, `slot()`, `seating()`, `openingDay()`) e `SlotBoard` sono senza HTTP.
 
 ## Prima di andare online
 
@@ -282,7 +349,8 @@ Cosa serve sul server Hostinger perché l'area clienti funzioni (fino ad allora 
 5. **Informativa privacy**: la registrazione chiede di averla letta. Pubblicala e metti il suo indirizzo in `content.privacy_url` di `config/site.php` prima di aprire la registrazione. Deve parlare anche delle prenotazioni (vedi [Privacy](#privacy)).
 6. **Prenotazioni**: conferma con il titolare le regole della sezione `booking` di `config/site.php` (orari, chiusure, durata, giorni in anticipo, limiti). Le pagine per prenotare si accendono con `booking.online` a `true` (oggi è già così: senza `config/local.php` rispondono "Prenotazioni presto"); dopo il deploy che porta la migrazione `0005_create_bookings` va lanciato subito `migrate`: fino ad allora la home mostra gli orari senza i posti, l'account dice che le prenotazioni non si possono mostrare, `/prenota/` risponde con un errore, e ogni volta l'errore finisce nel log.
 7. **Prova**: registrati con un'email vera, apri il link, entra, prenota una fascia (arriva l'email con l'evento da aggiungere al calendario), disdicila, esci, chiedi una nuova password.
-8. Facoltativo: un cron giornaliero `php _app/bin/console prune` (la pulizia avviene comunque a ogni accesso).
+8. **Titolare**: il titolare si registra dal sito con la sua email e la conferma; poi, via SSH da `public_html` (o con un cron di una volta sola), `php _app/bin/console admin:grant <email>`. Al prossimo accesso arriva nel pannello, `/gestione/`. `php _app/bin/console admin:list` dice chi è titolare; `admin:revoke <email>` toglie il ruolo e chiude le sue sessioni.
+9. Facoltativo: un cron giornaliero `php _app/bin/console prune` (la pulizia avviene comunque a ogni accesso).
 
 Se il sito passa dietro un CDN o un proxy (Cloudflare, il CDN di Hostinger), l'indirizzo del client non è più `REMOTE_ADDR`: i limiti per IP vanno rivisti prima di attivarlo.
 
@@ -453,15 +521,15 @@ Non fa commit nella repo: niente changelog e niente versione in `package.json`. 
 
 Un solo workflow: `.github/workflows/ci.yml`.
 
-| Job                 | Quando                                                     | Cosa fa                                                                                                                                                                                                                                                                               |
-| ------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| PHP 8.3 e 8.4       | ogni push su `develop` e `main`, ogni pull request         | `composer validate --strict`, dipendenze, `composer lint`, `composer analyse`, `composer test` (database SQLite in memoria)                                                                                                                                                           |
-| Database MariaDB    | come sopra                                                 | con un servizio MariaDB 10.11: `bin/console migrate` due volte (la seconda non deve fare nulla), poi i test del gruppo `database` su MariaDB                                                                                                                                          |
-| Front-end           | come sopra                                                 | `npm ci`, lint, formattazione, test, build                                                                                                                                                                                                                                            |
-| Messaggi di commit  | come sopra                                                 | commitlint sui commit del push o della pull request                                                                                                                                                                                                                                   |
-| Pacchetto di deploy | come sopra                                                 | `npm run assemble` con PHP 8.3, `npm run smoke` (anche area clienti e prenotazioni: 503 senza configurazione, poi un giro completo con una configurazione temporanea, dalla registrazione alla prenotazione con l'email e il file `.ics`, fino alla disdetta), artefatto `site-build` |
-| Deploy su Hostinger | push su `main` o avvio manuale su `main`, dopo i job sopra | sync FTPS dell'artefatto in `public_html` (mai `config/local.php` né `var/`), poi controlla che `/`, `/links/` e `/calendario.php` rispondano 200                                                                                                                                     |
-| Release             | push su `main`, dopo i job sopra                           | semantic-release                                                                                                                                                                                                                                                                      |
+| Job                 | Quando                                                     | Cosa fa                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PHP 8.3 e 8.4       | ogni push su `develop` e `main`, ogni pull request         | `composer validate --strict`, dipendenze, `composer lint`, `composer analyse`, `composer test` (database SQLite in memoria)                                                                                                                                                                                                                                                                                                 |
+| Database MariaDB    | come sopra                                                 | con un servizio MariaDB 10.11: `bin/console migrate` due volte (la seconda non deve fare nulla), poi i test del gruppo `database` su MariaDB                                                                                                                                                                                                                                                                                |
+| Front-end           | come sopra                                                 | `npm ci`, lint, formattazione, test, build                                                                                                                                                                                                                                                                                                                                                                                  |
+| Messaggi di commit  | come sopra                                                 | commitlint sui commit del push o della pull request                                                                                                                                                                                                                                                                                                                                                                         |
+| Pacchetto di deploy | come sopra                                                 | `npm run assemble` con PHP 8.3, `npm run smoke` (anche area clienti, prenotazioni e pannello del titolare: 503 senza configurazione, poi un giro completo con una configurazione temporanea, dalla registrazione alla prenotazione con l'email e il file `.ics`, fino alla disdetta; poi `admin:grant`, il pannello con una persona senza account e un cliente inseriti e disdetti, `admin:revoke`), artefatto `site-build` |
+| Deploy su Hostinger | push su `main` o avvio manuale su `main`, dopo i job sopra | sync FTPS dell'artefatto in `public_html` (mai `config/local.php` né `var/`), poi controlla che `/`, `/links/` e `/calendario.php` rispondano 200                                                                                                                                                                                                                                                                           |
+| Release             | push su `main`, dopo i job sopra                           | semantic-release                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 Il deploy carica lo stesso pacchetto già provato dal job "Pacchetto di deploy". È incrementale: un file di stato sul server (`.ftp-deploy-sync-state.json`) ricorda cosa è stato caricato. Si caricano solo i file nuovi o cambiati e si cancellano solo quelli caricati dal deploy e poi tolti dal pacchetto. Il resto di `public_html` non si tocca e la cartella non viene mai svuotata.
 

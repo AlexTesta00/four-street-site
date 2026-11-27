@@ -1,0 +1,40 @@
+/* ---------- Due campi alternativi ----------
+   Un fieldset con la legenda in maiuscoletto e due campi, separati da "oppure" fra due filetti: se ne compila uno.
+   Lo usa il modulo del titolare (l'email di un cliente registrato, oppure il nome di chi non ha l'account).
+   Flottante, la legenda è un elemento come gli altri della colonna. */
+
+@layer components {
+  .fs-choice {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .fs-choice__legend {
+    float: left;
+    width: 100%;
+    padding: 0;
+    color: var(--color-fg);
+  }
+  .fs-choice__or {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--color-fg-subtle);
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+  .fs-choice__or::before,
+  .fs-choice__or::after {
+    content: "";
+    flex: 1 1 0;
+    height: 1px;
+    background: var(--color-hairline-strong);
+  }
+}

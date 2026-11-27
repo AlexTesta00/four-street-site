@@ -1,0 +1,42 @@
+/* ---------- Scelta rapida del giorno ----------
+   Nel pannello del titolare la griglia dei giorni di /prenota/ (fs-days) sta dentro un details del browser:
+   chiuso, lascia le fasce nel primo schermo del telefono; si apre con il dito o da tastiera, anche senza
+   JavaScript. Come nelle domande frequenti, aperto il più diventa meno. */
+
+@layer components {
+  .fs-daypicker {
+    border-top: 1px solid var(--color-hairline);
+    border-bottom: 1px solid var(--color-hairline);
+  }
+  .fs-daypicker__toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 48px;
+    color: var(--color-fg-muted);
+    list-style: none;
+    cursor: pointer;
+    transition: color var(--duration-fast) var(--ease-out-soft);
+  }
+  .fs-daypicker__toggle::-webkit-details-marker {
+    display: none;
+  }
+  .fs-daypicker__toggle:hover {
+    color: var(--color-fg);
+  }
+  .fs-daypicker__icon {
+    width: 20px;
+    height: 20px;
+    flex: none;
+  }
+  .fs-daypicker__icon > path:last-child {
+    transition: opacity var(--duration-fast) var(--ease-out-soft);
+  }
+  .fs-daypicker[open] .fs-daypicker__icon > path:last-child {
+    opacity: 0;
+  }
+  .fs-daypicker__body {
+    padding: 4px 0 16px;
+  }
+}

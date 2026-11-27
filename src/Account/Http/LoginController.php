@@ -11,6 +11,7 @@ use FourStreet\Account\Notice;
 use FourStreet\Account\ReturnPath;
 use FourStreet\Account\Session\SessionManager;
 use FourStreet\Account\Session\Visitor;
+use FourStreet\Account\SignInDestination;
 use FourStreet\Http\Controller;
 use FourStreet\Http\Request;
 use FourStreet\Http\Response;
@@ -18,7 +19,8 @@ use FourStreet\Security\Csrf\CsrfToken;
 use FourStreet\View\Alert;
 
 /**
- * /account/accedi/: email e password. Riuscito l'accesso si torna alla destinazione (parametro "ritorno").
+ * /account/accedi/: email e password. Riuscito l'accesso si torna alla destinazione (parametro "ritorno");
+ * senza, all'account, e il titolare al suo pannello.
  * Un accesso non riuscito ha sempre la stessa risposta, anche per un account non ancora confermato:
  * la pagina ricorda a tutti di confermare l'email e offre un nuovo link, con l'email già scritta.
  */
@@ -28,14 +30,16 @@ final readonly class LoginController implements Controller
         private AccountPages $pages,
         private Login $login,
         private SessionManager $sessions,
+        private SignInDestination $destination,
     ) {}
 
     public function __invoke(Request $request): Response
     {
         $submitted = $request->method === 'POST';
         $returnTo = $submitted ? ReturnPath::fromBody($request) : ReturnPath::fromQuery($request);
-        if (Visitor::of($request)->isLoggedIn()) {
-            return Response::seeOther($returnTo->value);
+        $visitor = Visitor::of($request)->user;
+        if ($visitor !== null) {
+            return Response::seeOther($this->destination->for($visitor, $returnTo));
         }
         if (!$submitted) {
             return $this->pages->render('login', $this->data($request, LoginForm::blank(), $returnTo, Notice::fromRequest($request)?->alert()));
@@ -49,7 +53,7 @@ final readonly class LoginController implements Controller
         $result = $this->login->attempt($form->emailAddress(), $form->password(), $request->remoteAddress);
 
         return match ($result->status) {
-            LoginStatus::Success => Response::seeOther($returnTo->value)
+            LoginStatus::Success => Response::seeOther($this->destination->for($result->user(), $returnTo))
                 ->withCookie($this->sessions->start($result->user(), $request)),
             LoginStatus::WrongCredentials => $this->pages->render('login', [
                 ...$this->data($request, $form->withWrongCredentials(), $returnTo),

@@ -17,7 +17,8 @@ use FourStreet\Mail\Message;
 use FourStreet\Text\ItalianDateFormatter;
 
 /**
- * Le email delle prenotazioni: la conferma, con l'evento da aggiungere al calendario, e la disdetta.
+ * Le email delle prenotazioni: la conferma, con l'evento da aggiungere al calendario (la stessa anche quando
+ * la prenotazione la inserisce la palestra), la disdetta del cliente e quella fatta dalla palestra.
  * I link sono assoluti e nascono dall'origine pubblica del sito (base_url), mai dalla richiesta.
  */
 final readonly class BookingEmails
@@ -34,11 +35,16 @@ final readonly class BookingEmails
         private BookingCalendar $calendar,
     ) {}
 
-    /** La conferma di una prenotazione appena fatta, con l'evento .ics. */
+    /**
+     * La conferma di una prenotazione appena fatta, con l'evento .ics. Dice fino a quando il cliente la disdice
+     * dal suo account; se è già troppo tardi (la palestra l'ha inserita a ridosso dell'inizio, oltre la regola dei
+     * clienti) dice di avvisare la palestra, invece di promettere una disdetta che non c'è.
+     */
     public function confirmation(User $customer, Booking $booking, DateTimeImmutable $now): Message
     {
         $accountUrl = $this->origin->url(AccountUrls::HOME);
         $capacity = $this->calendar->rules()->capacity;
+        $cancellation = $this->calendar->canCancel($booking->startsAt, $now) ? $this->calendar->rules()->cancellationDeadline() : null;
 
         return $this->templates->message(
             $customer->mailbox(),
@@ -48,9 +54,9 @@ final readonly class BookingEmails
                 'seat' => $booking->seat(),
                 'capacity' => $capacity,
                 'accountUrl' => $accountUrl,
-                'cancellation' => $this->calendar->rules()->cancellationDeadline(),
+                'cancellation' => $cancellation,
             ]),
-        )->withAttachment(new Attachment(self::CALENDAR_FILE, self::CALENDAR_TYPE, $this->event($booking, $now, $accountUrl)->render()));
+        )->withAttachment(new Attachment(self::CALENDAR_FILE, self::CALENDAR_TYPE, $this->event($booking, $now, $accountUrl, $cancellation !== null)->render()));
     }
 
     /** L'avviso di una prenotazione disdetta dal cliente: il posto è tornato libero. */
@@ -69,10 +75,31 @@ final readonly class BookingEmails
     }
 
     /**
-     * L'evento della prenotazione: il suo UID non cambia, così un file nuovo aggiorna quello già nel calendario.
+     * L'avviso di una prenotazione disdetta dalla palestra: non dice "se non sei stato tu" (non l'ha fatto il cliente),
+     * propone un'altra fascia se dal sito si prenota e, se c'è, il WhatsApp della palestra per chiedere.
      */
-    private function event(Booking $booking, DateTimeImmutable $now, string $accountUrl): IcsCalendar
+    public function cancellationByGym(User $customer, Booking $booking): Message
     {
+        return $this->templates->message(
+            $customer->mailbox(),
+            sprintf('Prenotazione disdetta dalla palestra: %s, ore %s', $this->day($booking, withYear: false), $booking->time),
+            'booking-cancelled-by-gym',
+            $this->data($customer, $booking, [
+                'bookUrl' => $this->site->booking->online ? $this->origin->url(BookingUrls::DAY) : null,
+                'whatsappUrl' => $this->site->link('whatsapp'),
+            ]),
+        );
+    }
+
+    /**
+     * L'evento della prenotazione: il suo UID non cambia, così un file nuovo aggiorna quello già nel calendario.
+     *
+     * @param bool $cancellable il cliente la disdice ancora dal suo account: la descrizione gli dice dove
+     */
+    private function event(Booking $booking, DateTimeImmutable $now, string $accountUrl, bool $cancellable): IcsCalendar
+    {
+        $seat = sprintf('Posto %d di %d.', $booking->seat(), $this->calendar->rules()->capacity);
+
         return (new IcsCalendar('-//4Street//Prenotazione//IT'))->withEvent(new IcsEvent(
             uid: sprintf('prenotazione-%d@%s', $booking->id, $this->origin->host),
             summary: 'Allenamento a ' . $this->site->name,
@@ -81,7 +108,7 @@ final readonly class BookingEmails
             allDay: false,
             stamp: $now,
             end: $this->calendar->endOf($booking->startsAt),
-            description: sprintf('Posto %d di %d. Per disdire: %s', $booking->seat(), $this->calendar->rules()->capacity, $accountUrl),
+            description: $cancellable ? $seat . ' Per disdire: ' . $accountUrl : $seat,
             url: $accountUrl,
         ));
     }

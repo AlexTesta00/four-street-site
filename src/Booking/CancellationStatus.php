@@ -10,7 +10,7 @@ enum CancellationStatus
     case Cancelled;
 
     /**
-     * La prenotazione del cliente era già disdetta da lui: di solito lo stesso modulo inviato due volte
+     * La prenotazione era già disdetta (per il cliente: da lui stesso): di solito lo stesso modulo inviato due volte
      * (doppio tocco senza JavaScript, due schede). Nulla cambia e non parte nessuna email.
      */
     case AlreadyCancelled;

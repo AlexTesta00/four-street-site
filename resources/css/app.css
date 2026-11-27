@@ -23,6 +23,7 @@
 @import "./components/seat.css";
 @import "./components/field.css";
 @import "./components/check.css";
+@import "./components/choice.css";
 @import "./components/alert.css";
 
 /* Blocchi della pagina, nell'ordine in cui compaiono */
@@ -47,6 +48,11 @@
 @import "./components/auth.css";
 @import "./components/day.css";
 @import "./components/agenda.css";
+
+/* Pannello del titolare */
+@import "./components/daynav.css";
+@import "./components/daypicker.css";
+@import "./components/roster.css";
 
 @import "./motion.css";
 @import "./reduced-motion.css";

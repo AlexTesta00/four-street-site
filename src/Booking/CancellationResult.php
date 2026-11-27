@@ -21,13 +21,16 @@ final readonly class CancellationResult
         public int $retryAfter = 0,
     ) {}
 
-    /** @param Booking $booking la prenotazione disdetta, così com'era prima: giorno, orario, posto */
+    /**
+     * @param Booking $booking la prenotazione disdetta, così com'era prima: giorno, orario, posto
+     * @param EmailDelivery $email l'avviso alla persona (NoAddress se non ha l'account)
+     */
     public static function cancelled(Booking $booking, EmailDelivery $email): self
     {
         return new self(CancellationStatus::Cancelled, $booking, $email);
     }
 
-    /** @param Booking $booking la prenotazione del cliente, già disdetta da lui */
+    /** @param Booking $booking la prenotazione già disdetta: per il cliente da lui stesso, per il titolare da chiunque */
     public static function alreadyCancelled(Booking $booking): self
     {
         return new self(CancellationStatus::AlreadyCancelled, $booking);

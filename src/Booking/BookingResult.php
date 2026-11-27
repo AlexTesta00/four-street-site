@@ -44,7 +44,7 @@ final readonly class BookingResult
         return new self(BookingStatus::Full, $slot);
     }
 
-    /** @param Booking $existing la prenotazione che il cliente ha già quel giorno */
+    /** @param Booking $existing la prenotazione che la persona ha già: quel giorno (cliente) o in quella fascia (senza account) */
     public static function alreadyBooked(ScheduledSlot $slot, Booking $existing): self
     {
         return new self(BookingStatus::AlreadyBooked, $slot, $existing);
@@ -65,12 +65,18 @@ final readonly class BookingResult
         return new self(BookingStatus::NotFound);
     }
 
+    /** @param ScheduledSlot $slot la fascia chiesta, che esiste e si prenota: è l'email a non essere di un cliente */
+    public static function unknownCustomer(ScheduledSlot $slot): self
+    {
+        return new self(BookingStatus::UnknownCustomer, $slot);
+    }
+
     public static function throttled(int $retryAfter): self
     {
         return new self(BookingStatus::Throttled, retryAfter: $retryAfter);
     }
 
-    /** La stessa prenotazione, con l'esito dell'email di conferma. */
+    /** La stessa prenotazione, con l'esito dell'email di conferma (NoAddress per una persona senza account). */
     public function withEmail(EmailDelivery $email): self
     {
         if ($this->status !== BookingStatus::Booked) {
@@ -110,7 +116,7 @@ final readonly class BookingResult
         return $this->email ?? throw new LogicException(sprintf('Nessuna email per l\'esito %s.', $this->status->name));
     }
 
-    /** Il cliente ha già proprio questa fascia: di solito lo stesso modulo inviato due volte. */
+    /** La persona ha già proprio questa fascia: di solito lo stesso modulo inviato due volte. */
     public function isRepeat(): bool
     {
         return $this->status === BookingStatus::AlreadyBooked

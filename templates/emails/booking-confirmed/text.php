@@ -15,7 +15,7 @@ use FourStreet\View\Template;
  * @var int $seat
  * @var int $capacity
  * @var string $accountUrl la pagina dell'account, dove si disdice
- * @var string $cancellation fino a quando si disdice: "fino all'inizio della fascia"
+ * @var string|null $cancellation fino a quando si disdice: "fino all'inizio della fascia"; null se ormai non si disdice più
  * @var string $siteName
  * @var string $address
  * @var string $siteUrl
@@ -24,6 +24,9 @@ use FourStreet\View\Template;
 $view->layout('emails/layout/text', ['siteName' => $siteName, 'address' => $address, 'siteUrl' => $siteUrl]);
 
 $dayTitle = ucfirst($day);
+$cancel = $cancellation === null
+    ? 'Se non puoi venire, avvisa la palestra: per questa fascia la disdetta dal tuo account è già chiusa.'
+    : "Se non puoi venire, disdici dal tuo account {$cancellation}: il posto torna libero per un altro.";
 
 echo <<<TEXT
     {$greeting}
@@ -37,7 +40,7 @@ echo <<<TEXT
 
     In allegato c'è l'evento da aggiungere al calendario.
 
-    Se non puoi venire, disdici dal tuo account {$cancellation}: il posto torna libero per un altro.
+    {$cancel}
 
     {$accountUrl}
     TEXT;

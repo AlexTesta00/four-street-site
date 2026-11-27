@@ -16,7 +16,7 @@ use FourStreet\View\Template;
  * @var int $seat
  * @var int $capacity
  * @var string $accountUrl la pagina dell'account, dove si disdice
- * @var string $cancellation fino a quando si disdice: "fino all'inizio della fascia"
+ * @var string|null $cancellation fino a quando si disdice: "fino all'inizio della fascia"; null se ormai non si disdice più
  * @var string $siteName
  * @var string $address
  * @var string $siteUrl
@@ -39,4 +39,6 @@ $view->layout('emails/layout/html', [
     'Dove' => $address,
 ]]) ?>
 <?= $view->partial('emails/partials/button', ['url' => $accountUrl, 'label' => 'Le tue prenotazioni']) ?>
-<?= $view->partial('emails/partials/paragraph', ['text' => sprintf('In allegato c\'è l\'evento da aggiungere al calendario. Se non puoi venire, disdici dal tuo account %s: il posto torna libero per un altro.', $cancellation), 'muted' => true]) ?>
+<?= $view->partial('emails/partials/paragraph', ['text' => 'In allegato c\'è l\'evento da aggiungere al calendario. ' . ($cancellation === null
+    ? 'Se non puoi venire, avvisa la palestra: per questa fascia la disdetta dal tuo account è già chiusa.'
+    : sprintf('Se non puoi venire, disdici dal tuo account %s: il posto torna libero per un altro.', $cancellation)), 'muted' => true]) ?>

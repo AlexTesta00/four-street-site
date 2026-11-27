@@ -8,6 +8,8 @@ use FourStreet\Account\AccountModule;
 use FourStreet\Account\AccountUrls;
 use FourStreet\Account\Http\AccountPages;
 use FourStreet\Account\Http\AccountUnavailableController;
+use FourStreet\Admin\AdminModule;
+use FourStreet\Admin\AdminUrls;
 use FourStreet\Asset\AssetUrls;
 use FourStreet\Asset\FilesystemMtimeLookup;
 use FourStreet\Asset\MtimeLookup;
@@ -45,7 +47,7 @@ use Throwable;
  * Il sito: riceve una richiesta, restituisce una risposta; poi, con finish(), fa il lavoro che può
  * aspettare (le email in coda). Un'Application serve una richiesta sola, come in index.php.
  * create() è l'unico punto in cui le dipendenze vengono costruite e collegate; ogni modulo
- * (l'area clienti, le prenotazioni) porta le sue rotte già pronte.
+ * (l'area clienti, le prenotazioni, il pannello del titolare) porta le sue rotte già pronte.
  */
 final readonly class Application
 {
@@ -107,14 +109,16 @@ final readonly class Application
         $view = new View($templateDirectory, new AssetUrls($publicDirectory, $mtimes), new Icons());
         $dates = new ItalianDateFormatter();
         $maps = new MapLinks($site->address, $site->mapsUrl);
+        $notFound = new NotFoundController($view, $site);
 
-        // Senza database e posta l'area clienti risponde "non ancora attiva" e le prenotazioni "presto";
-        // home, link e calendario funzionano come sempre.
+        // Senza database e posta l'area clienti e il pannello del titolare rispondono "non ancora attiva" e le
+        // prenotazioni "presto"; home, link e calendario funzionano come sempre.
         if ($backend === null) {
             $outbox = null;
             $accountUnavailable = new AccountUnavailableController(new AccountPages($view, $site, $clock));
             $accountRoutes = AccountModule::unavailableRoutes($accountUnavailable);
             $bookingRoutes = BookingModule::unavailableRoutes(BookingModule::comingSoon($view, $site, $clock), $accountUnavailable);
+            $adminRoutes = AdminModule::unavailableRoutes($accountUnavailable);
         } else {
             $outbox = new Outbox($backend->mailer, $reporter);
             $account = AccountModule::create(
@@ -125,10 +129,14 @@ final readonly class Application
                 $reporter,
                 $outbox,
                 new FormExpiredController($view, $site, $clock),
-                [BookingModule::dashboardSection($backend, $view, $site, $clock, $reporter)],
+                // Chi apre il pannello senza essere titolare vede la stessa pagina di un indirizzo che non esiste.
+                $notFound,
+                [AdminModule::dashboardSection($view), BookingModule::dashboardSection($backend, $view, $site, $clock, $reporter)],
+                AdminUrls::HOME,
             );
             $accountRoutes = $account->routes();
             $bookingRoutes = BookingModule::create($backend, $view, $site, $clock, $reporter, $account->guards())->routes();
+            $adminRoutes = AdminModule::create($backend, $view, $site, $clock, $reporter, $account->guards())->routes();
         }
         $bookingsOnline = $backend !== null && $site->booking->online;
 
@@ -151,9 +159,10 @@ final readonly class Application
             Route::get('/links/index.php', new RedirectController('/links/')),
             ...$accountRoutes,
             ...$bookingRoutes,
+            ...$adminRoutes,
         ]);
 
-        return new self($router, new NotFoundController($view, $site), SecurityHeaders::forSite(), $reporter, $outbox);
+        return new self($router, $notFound, SecurityHeaders::forSite(), $reporter, $outbox);
     }
 
     public function handle(Request $request): Response

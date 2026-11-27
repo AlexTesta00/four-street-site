@@ -12,8 +12,17 @@ use FourStreet\Database\Migration\Migration;
 // lascia al cliente una sola prenotazione attiva al giorno. Disdetta, la prenotazione libera il posto
 // (seat e active a NULL: i NULL non si scontrano nei vincoli UNIQUE, né su SQLite né su MySQL) e resta
 // come storico, con quando e chi l'ha disdetta (customer oppure admin). Date e ore tecniche in UTC.
-// Il CHECK dello stato confronta i NULL con IS (NOT) NULL: un CHECK fallisce solo se è falso, e con
-// "active = 1" una riga a metà (un posto senza active) darebbe "sconosciuto" e passerebbe.
+//
+// La persona è un cliente registrato (user_id) oppure, solo se l'ha inserita la palestra, una persona senza
+// account (guest_name, il nome scritto dal titolare): sempre esattamente una delle due. created_by dice chi
+// l'ha inserita. Per chi non ha l'account UNIQUE (fascia, guest_name, active) vale come "stesso nome nella
+// stessa fascia, stessa persona": lo stesso modulo inviato due volte non scrive due righe. Il nome si confronta
+// byte per byte (utf8mb4_bin su MySQL, come il TEXT di SQLite), già normalizzato negli spazi dall'applicazione.
+//
+// I CHECK confrontano i NULL con IS (NOT) NULL: un CHECK fallisce solo se è falso, e con "active = 1"
+// una riga a metà (un posto senza active) darebbe "sconosciuto" e passerebbe.
+// Il CHECK della persona usa user_id, che ha ON DELETE CASCADE: MariaDB lo accetta perché cancellare la riga
+// non riscrive la colonna (rifiuta un CHECK solo sulle colonne che ON UPDATE CASCADE o SET NULL riscrivono).
 return new class implements Migration {
     public function statements(Driver $driver): array
     {
@@ -22,21 +31,28 @@ return new class implements Migration {
                 <<<'SQL'
                     CREATE TABLE IF NOT EXISTS bookings (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+                        user_id INTEGER NULL REFERENCES users (id) ON DELETE CASCADE,
+                        guest_name TEXT NULL CHECK (length(guest_name) BETWEEN 2 AND 100),
                         slot_date TEXT NOT NULL,
                         slot_time TEXT NOT NULL,
                         starts_at TEXT NOT NULL,
                         seat INTEGER NULL CHECK (seat >= 1),
                         active INTEGER NULL CHECK (active = 1),
                         created_at TEXT NOT NULL,
+                        created_by TEXT NOT NULL CHECK (created_by IN ('customer', 'admin')),
                         cancelled_at TEXT NULL,
                         cancelled_by TEXT NULL CHECK (cancelled_by IN ('customer', 'admin')),
+                        CHECK (
+                            (user_id IS NOT NULL AND guest_name IS NULL)
+                            OR (user_id IS NULL AND guest_name IS NOT NULL AND created_by = 'admin')
+                        ),
                         CHECK (
                             (active IS NOT NULL AND seat IS NOT NULL AND cancelled_at IS NULL AND cancelled_by IS NULL)
                             OR (active IS NULL AND seat IS NULL AND cancelled_at IS NOT NULL AND cancelled_by IS NOT NULL)
                         ),
                         UNIQUE (slot_date, slot_time, seat),
-                        UNIQUE (user_id, slot_date, active)
+                        UNIQUE (user_id, slot_date, active),
+                        UNIQUE (slot_date, slot_time, guest_name, active)
                     ) STRICT
                     SQL,
             ],
@@ -44,21 +60,30 @@ return new class implements Migration {
                 <<<'SQL'
                     CREATE TABLE IF NOT EXISTS bookings (
                         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-                        user_id BIGINT UNSIGNED NOT NULL,
+                        user_id BIGINT UNSIGNED NULL,
+                        guest_name VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
                         slot_date DATE NOT NULL,
                         slot_time CHAR(5) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
                         starts_at DATETIME NOT NULL,
                         seat SMALLINT UNSIGNED NULL,
                         active TINYINT UNSIGNED NULL,
                         created_at DATETIME NOT NULL,
+                        created_by VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
                         cancelled_at DATETIME NULL,
                         cancelled_by VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NULL,
                         PRIMARY KEY (id),
                         UNIQUE KEY bookings_seat_unique (slot_date, slot_time, seat),
                         UNIQUE KEY bookings_one_per_day_unique (user_id, slot_date, active),
+                        UNIQUE KEY bookings_guest_unique (slot_date, slot_time, guest_name, active),
                         CONSTRAINT bookings_seat_check CHECK (seat >= 1),
                         CONSTRAINT bookings_active_check CHECK (active = 1),
+                        CONSTRAINT bookings_guest_name_check CHECK (CHAR_LENGTH(guest_name) BETWEEN 2 AND 100),
+                        CONSTRAINT bookings_created_by_check CHECK (created_by IN ('customer', 'admin')),
                         CONSTRAINT bookings_cancelled_by_check CHECK (cancelled_by IN ('customer', 'admin')),
+                        CONSTRAINT bookings_person_check CHECK (
+                            (user_id IS NOT NULL AND guest_name IS NULL)
+                            OR (user_id IS NULL AND guest_name IS NOT NULL AND created_by = 'admin')
+                        ),
                         CONSTRAINT bookings_state_check CHECK (
                             (active IS NOT NULL AND seat IS NOT NULL AND cancelled_at IS NULL AND cancelled_by IS NULL)
                             OR (active IS NULL AND seat IS NULL AND cancelled_at IS NOT NULL AND cancelled_by IS NOT NULL)

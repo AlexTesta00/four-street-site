@@ -12,4 +12,7 @@ enum EmailDelivery
 {
     case Sent;
     case Failed;
+
+    /** Nessuna email da mandare: la persona non ha un account, quindi nemmeno un indirizzo (la avvisa la palestra). */
+    case NoAddress;
 }

@@ -68,6 +68,14 @@ final readonly class PdoUserRepository implements UserRepository
         return $row === null ? null : self::user($row);
     }
 
+    public function findByRole(Role $role): array
+    {
+        return array_map(self::user(...), $this->database->fetchAll(
+            'SELECT ' . self::COLUMNS . ' FROM users WHERE role = :role ORDER BY email',
+            ['role' => $role->value],
+        ));
+    }
+
     public function replaceUnverified(int $id, NewUser $registration): void
     {
         $at = UtcDateTime::format($registration->at);
@@ -99,6 +107,14 @@ final readonly class PdoUserRepository implements UserRepository
         $this->database->execute(
             'UPDATE users SET password_hash = :password_hash, updated_at = :updated_at WHERE id = :id',
             ['password_hash' => $passwordHash, 'updated_at' => UtcDateTime::format($at), 'id' => $id],
+        );
+    }
+
+    public function updateRole(int $id, Role $role, DateTimeImmutable $at): void
+    {
+        $this->database->execute(
+            'UPDATE users SET role = :role, updated_at = :updated_at WHERE id = :id',
+            ['role' => $role->value, 'updated_at' => UtcDateTime::format($at), 'id' => $id],
         );
     }
 

@@ -17,6 +17,7 @@ use FourStreet\Account\Http\ResetPasswordController;
 use FourStreet\Account\Http\SignupBrowser;
 use FourStreet\Account\Http\VerifyEmailController;
 use FourStreet\Account\Session\PdoSessionRepository;
+use FourStreet\Account\Session\RequireAdmin;
 use FourStreet\Account\Session\RequireLogin;
 use FourStreet\Account\Session\SessionManager;
 use FourStreet\Account\Session\StartSession;
@@ -78,7 +79,9 @@ final readonly class AccountModule implements RouteProvider
     /**
      * @param Outbox $outbox le email che partono dopo la risposta (Application la svuota)
      * @param Controller $formExpired la pagina dei moduli respinti dalla protezione CSRF
-     * @param list<DashboardSection> $dashboardSections le sezioni di altri moduli nella pagina dell'account (le prenotazioni)
+     * @param Controller $notFound la pagina degli indirizzi che non esistono: la vede chi apre una pagina del titolare senza esserlo
+     * @param list<DashboardSection> $dashboardSections le sezioni di altri moduli nella pagina dell'account (le prenotazioni, il pannello)
+     * @param string|null $adminHome dove va il titolare dopo l'accesso, se non ha chiesto un'altra pagina
      */
     public static function create(
         Backend $backend,
@@ -88,7 +91,9 @@ final readonly class AccountModule implements RouteProvider
         ExceptionReporter $reporter,
         Outbox $outbox,
         Controller $formExpired,
+        Controller $notFound,
         array $dashboardSections = [],
+        ?string $adminHome = null,
     ): self {
         $database = $backend->database;
         $users = new PdoUserRepository($database);
@@ -123,6 +128,7 @@ final readonly class AccountModule implements RouteProvider
             new StartSession($sessions),
             new RequireLogin(),
             new NoReferrer(),
+            new RequireAdmin($notFound),
         );
         $pages = new AccountPages($view, $site, $clock);
         $signup = new SignupBrowser($cookies);
@@ -133,7 +139,7 @@ final readonly class AccountModule implements RouteProvider
             AccountUrls::REGISTER_SENT => [new CheckEmailController($pages, TokenPurpose::EmailVerification), $guards->page()],
             AccountUrls::VERIFY => [new VerifyEmailController($pages, $verification, $sessions, $signup), $guards->tokenPage()],
             AccountUrls::VERIFY_RESEND => [new ResendVerificationController($pages, $verification), $guards->page()],
-            AccountUrls::LOGIN => [new LoginController($pages, $login, $sessions), $guards->page()],
+            AccountUrls::LOGIN => [new LoginController($pages, $login, $sessions, new SignInDestination($adminHome)), $guards->page()],
             AccountUrls::LOGOUT => [new LogoutController($pages, $sessions), $guards->page()],
             AccountUrls::FORGOT_PASSWORD => [new ForgotPasswordController($pages, $reset), $guards->page()],
             AccountUrls::FORGOT_PASSWORD_SENT => [new CheckEmailController($pages, TokenPurpose::PasswordReset), $guards->page()],

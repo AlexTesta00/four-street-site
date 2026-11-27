@@ -99,6 +99,26 @@ final class RepositoriesTest extends TestCase
         self::assertNull($this->users->findByEmail($this->email('nessuno@example.com')));
     }
 
+    public function testTheRoleChangesOnlyWhenAsked(): void
+    {
+        $titolare = $this->users->create($this->registration('titolare@example.test'));
+        $this->users->create($this->registration('cliente@example.test'));
+        $this->users->create($this->registration('altro@example.test'));
+        self::assertSame([], $this->users->findByRole(Role::Admin));
+        $this->clock->travel('+1 hour');
+
+        $this->users->updateRole($titolare->id, Role::Admin, $this->clock->now());
+
+        $admin = $this->find($titolare->id);
+        self::assertSame(Role::Admin, $admin->role);
+        self::assertSame('2026-11-25 08:00:00', UtcDateTime::format($admin->updatedAt));
+        self::assertSame(['titolare@example.test'], array_map(static fn(User $user): string => $user->email->value, $this->users->findByRole(Role::Admin)));
+        self::assertSame(['altro@example.test', 'cliente@example.test'], array_map(static fn(User $user): string => $user->email->value, $this->users->findByRole(Role::Customer)), 'In ordine di email.');
+
+        $this->users->updateRole($titolare->id, Role::Customer, $this->clock->now());
+        self::assertSame([], $this->users->findByRole(Role::Admin));
+    }
+
     public function testTheSameEmailCannotHaveTwoAccounts(): void
     {
         $this->users->create($this->registration('mario@example.com'));

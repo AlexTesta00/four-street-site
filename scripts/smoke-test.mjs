@@ -2,9 +2,9 @@
 // con build/index.php come router. Due giri:
 //
 // 1. Senza configurazione locale, come un server appena caricato: codici di stato, tipi di contenuto
-//    e alcuni testi delle pagine principali, l'area clienti e le prenotazioni che rispondono 503
-//    ("non ancora attiva", "Prenotazioni presto"), poi la forma del pacchetto (vendor senza dev,
-//    _app/ protetta, niente config/local.php né var/).
+//    e alcuni testi delle pagine principali, l'area clienti, le prenotazioni e il pannello del titolare
+//    che rispondono 503 ("non ancora attiva", "Prenotazioni presto"), poi la forma del pacchetto
+//    (vendor senza dev, _app/ protetta, niente config/local.php né var/).
 // 2. Con una configurazione locale temporanea fuori da build/ (SQLite e posta in file .eml in una
 //    cartella temporanea), indicata con FOURSTREET_LOCAL_CONFIG: migrazioni con la console del
 //    pacchetto, registrazione, link letto dall'email (da un altro browser chiede la password),
@@ -12,6 +12,9 @@
 //    Poi, se booking.online è true in config/site.php del pacchetto, la prenotazione di una fascia:
 //    landing con le fasce vere, scelta, riepilogo, conferma, email con l'evento .ics, prenotazione
 //    nell'account, disdetta e la sua email. Con booking.online a false controlla "Prenotazioni presto".
+//    Infine il pannello del titolare: 404 per il cliente, admin:grant dalla console del pacchetto,
+//    una persona senza account e un cliente inseriti dal pannello, le due disdette con le loro email
+//    (solo al cliente), admin:list e admin:revoke, che chiude le sessioni.
 //
 // Alla fine build/ deve essere identica a com'era: è l'artefatto che va in produzione.
 //
@@ -103,6 +106,20 @@ const REQUESTS = [
   },
   {
     path: '/account/prenotazioni/1/disdici/',
+    status: 503,
+    type: 'text/html',
+    body: ['Arriva presto.'],
+  },
+  // Il pannello del titolare senza config/local.php: come il resto dell'area clienti.
+  { path: '/gestione/', status: 503, type: 'text/html', body: ['Arriva presto.'] },
+  {
+    path: '/gestione/prenotazioni/nuova/?giorno=2026-12-07&fascia=18%3A30',
+    status: 503,
+    type: 'text/html',
+    body: ['Arriva presto.'],
+  },
+  {
+    path: '/gestione/prenotazioni/1/disdici/',
     status: 503,
     type: 'text/html',
     body: ['Arriva presto.'],
@@ -439,6 +456,159 @@ async function checkBookingJourney(browser, mailDir) {
   );
 }
 
+/** Il primo "Aggiungi" del pannello, dal giorno che si apre e poi con "giorno dopo": il modulo di una fascia. */
+async function findAddLink(browser) {
+  let path = '/gestione/';
+  for (let step = 0; step < 31; step += 1) {
+    const page = await (await browser.get(path)).text();
+    const add = page.match(
+      /href="(\/gestione\/prenotazioni\/nuova\/\?giorno=\d{4}-\d{2}-\d{2}&amp;fascia=\d{2}%3A\d{2})"/,
+    )?.[1];
+    if (add) return add.replaceAll('&amp;', '&');
+    const next = page.match(
+      /href="(\/gestione\/\?giorno=\d{4}-\d{2}-\d{2})"[^>]*fs-daynav__step--next/,
+    )?.[1];
+    if (!next) return undefined;
+    path = next;
+  }
+  return undefined;
+}
+
+/**
+ * Il pannello del titolare con il browser del cliente dello smoke test: prima non c'è (404), poi
+ * admin:grant dalla console del pacchetto, il giorno con le fasce, una persona senza account e il cliente
+ * stesso inseriti dal pannello (conferma con l'evento solo al cliente), le due disdette (l'email solo al
+ * cliente, quella della palestra), admin:list, e admin:revoke che chiude le sessioni.
+ */
+async function checkAdminJourney(browser, localConfig, mailDir) {
+  const before = await browser.get('/gestione/');
+  await before.text();
+  check(before.status === 404, `un cliente non vede il pannello: GET /gestione/ ${before.status}`);
+
+  const grant = runConsole(localConfig, ['admin:grant', 'smoke@example.com']);
+  check(
+    grant.status === 0 && grant.stdout.includes('ora è titolare'),
+    `bin/console admin:grant dà il ruolo di titolare (uscita ${grant.status})`,
+  );
+
+  const panel = await browser.get('/gestione/');
+  const panelPage = await panel.text();
+  check(
+    panel.status === 200 &&
+      panelPage.includes('Gestione prenotazioni') &&
+      panelPage.includes('<nav class="fs-daynav"') &&
+      panel.headers.get('cache-control') === 'no-store',
+    `il titolare entra nel pannello (${panel.status})`,
+  );
+
+  const addLink = await findAddLink(browser);
+  check(addLink !== undefined, 'il pannello ha una fascia dove aggiungere qualcuno');
+  if (addLink === undefined) return;
+  const form = await browser.get(addLink);
+  const formPage = await form.text();
+  const giorno = formPage.match(/name="giorno" value="(\d{4}-\d{2}-\d{2})"/)?.[1] ?? '';
+  const fascia = formPage.match(/name="fascia" value="(\d{2}:\d{2})"/)?.[1] ?? '';
+  check(
+    form.status === 200 && giorno !== '' && fascia !== '',
+    `il modulo ${addLink} (${form.status})`,
+  );
+
+  const add = (fields) =>
+    browser.post('/gestione/prenotazioni/nuova/', {
+      csrf: browser.cookies.get('csrf') ?? '',
+      giorno,
+      fascia,
+      email: '',
+      nome: '',
+      ...fields,
+    });
+  const bookingId = (response) =>
+    response.headers.get('location')?.match(/[?&]prenotazione=(\d+)$/)?.[1];
+
+  const emailsBefore = emailFiles(mailDir).length;
+  const guest = await add({ nome: 'Ospite Smoke' });
+  await guest.text();
+  const guestId = bookingId(guest);
+  check(
+    guest.status === 303 &&
+      guest.headers
+        .get('location')
+        ?.startsWith(`/gestione/?giorno=${giorno}&avviso=prenotazione-inserita&`) &&
+      guestId !== undefined,
+    `POST del pannello inserisce una persona senza account (${guest.status} ${guest.headers.get('location')})`,
+  );
+  const dayPage = await (await browser.get(guest.headers.get('location') ?? '/gestione/')).text();
+  check(
+    dayPage.includes('Ospite Smoke') && dayPage.includes('Prenotazione inserita'),
+    "il giorno mostra la persona e l'avviso",
+  );
+  check(
+    emailFiles(mailDir).length === emailsBefore,
+    "per chi non ha l'account non parte nessuna email",
+  );
+
+  const customer = await add({ email: 'smoke@example.com' });
+  await customer.text();
+  const customerId = bookingId(customer);
+  const afterCustomer = emailFiles(mailDir);
+  const confirmation =
+    afterCustomer.length === emailsBefore + 1 ? readRawEmail(mailDir, afterCustomer.at(-1)) : '';
+  check(
+    customer.status === 303 &&
+      customerId !== undefined &&
+      confirmation.includes('Subject: Prenotazione confermata') &&
+      calendarAttachment(confirmation).includes('BEGIN:VEVENT'),
+    `il cliente inserito dal pannello riceve la conferma con l'evento (${customer.status})`,
+  );
+
+  const cancel = async (id) => {
+    const page = await browser.get(`/gestione/prenotazioni/${id}/disdici/`);
+    await page.text();
+    const done = await browser.post(`/gestione/prenotazioni/${id}/disdici/`, {
+      csrf: browser.cookies.get('csrf') ?? '',
+    });
+    await done.text();
+    return [page.status, done];
+  };
+  const [guestPage, guestCancelled] = await cancel(guestId);
+  check(
+    guestPage === 200 &&
+      guestCancelled.status === 303 &&
+      guestCancelled.headers.get('location')?.includes('avviso=prenotazione-disdetta&') &&
+      emailFiles(mailDir).length === afterCustomer.length,
+    `la disdetta di chi non ha l'account, senza email (${guestPage} ${guestCancelled.status})`,
+  );
+  const [customerPage, customerCancelled] = await cancel(customerId);
+  const afterCancel = emailFiles(mailDir);
+  const byGym =
+    afterCancel.length === afterCustomer.length + 1
+      ? readRawEmail(mailDir, afterCancel.at(-1))
+      : '';
+  check(
+    customerPage === 200 &&
+      customerCancelled.status === 303 &&
+      byGym.includes('Subject: Prenotazione disdetta dalla palestra'),
+    `la disdetta del cliente manda l'email della palestra (${customerPage} ${customerCancelled.status})`,
+  );
+
+  const list = runConsole(localConfig, ['admin:list']);
+  check(
+    list.status === 0 && list.stdout.includes('smoke@example.com'),
+    'bin/console admin:list elenca il titolare',
+  );
+  const revoke = runConsole(localConfig, ['admin:revoke', 'smoke@example.com']);
+  check(
+    revoke.status === 0 && revoke.stdout.includes('non è più titolare'),
+    `bin/console admin:revoke toglie il ruolo (uscita ${revoke.status})`,
+  );
+  const after = await browser.get('/gestione/');
+  await after.text();
+  check(
+    after.status === 303 && after.headers.get('location') === '/account/accedi/?ritorno=/gestione/',
+    `admin:revoke chiude le sessioni: il pannello rimanda all'accesso (${after.status})`,
+  );
+}
+
 /** La console del pacchetto, con la configurazione locale indicata ("--": gli argomenti sono della console). */
 function runConsole(localConfig, args) {
   return spawnSync(php, ['-f', join(buildDir, '_app/bin/console'), '--', ...args], {
@@ -585,6 +755,8 @@ async function checkAccountJourney(temporary) {
 
     // La prenotazione di una fascia, con il browser che ha fatto l'accesso.
     await checkBookingJourney(browser, mailDir);
+    // Il pannello del titolare, con lo stesso browser dopo admin:grant.
+    await checkAdminJourney(browser, localConfig, mailDir);
   } finally {
     await stopServer(server);
   }

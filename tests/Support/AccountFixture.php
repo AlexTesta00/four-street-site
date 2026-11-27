@@ -8,14 +8,17 @@ use FourStreet\Account\EmailAddress;
 use FourStreet\Account\FullName;
 use FourStreet\Account\NewUser;
 use FourStreet\Account\PdoUserRepository;
+use FourStreet\Account\Role;
 use FourStreet\Account\User;
 use FourStreet\Application;
 use FourStreet\Backend;
 use FourStreet\Booking\Booking;
 use FourStreet\Booking\BookingCalendar;
 use FourStreet\Booking\BookingStatus;
+use FourStreet\Booking\CreatedBy;
 use FourStreet\Booking\LocalDate;
 use FourStreet\Booking\PdoBookingRepository;
+use FourStreet\Booking\ScheduledSlot;
 use FourStreet\Booking\SlotTime;
 use FourStreet\Config\SiteConfig;
 use FourStreet\Database\Database;
@@ -154,10 +157,45 @@ final class AccountFixture
     }
 
     /**
+     * Il titolare: un account confermato con il ruolo admin, scritto direttamente nel database.
+     * Si entra con logIn($browser, $email).
+     */
+    public function admin(string $email = 'titolare@example.test', string $name = 'Titolare Prova'): User
+    {
+        $user = $this->customer($email, $name);
+        $users = new PdoUserRepository($this->database);
+        $users->updateRole($user->id, Role::Admin, $this->clock->now());
+        $admin = $users->findById($user->id);
+        Assert::assertNotNull($admin);
+
+        return $admin;
+    }
+
+    /**
      * Una prenotazione scritta direttamente nel database, come se il cliente l'avesse fatta dal sito
      * (stesso repository, senza limiti né email): per riempire una fascia o preparare uno storico.
      */
     public function book(User $customer, string $date, string $time): Booking
+    {
+        $result = (new PdoBookingRepository($this->database))->place($customer->id, $this->slot($date, $time), $this->site->booking->capacity, null, $this->clock->now(), CreatedBy::Customer);
+        Assert::assertSame(BookingStatus::Booked, $result->status);
+
+        return $result->booking();
+    }
+
+    /** Una prenotazione di una persona senza account, inserita dal titolare: scritta direttamente nel database. */
+    public function bookGuest(User $staff, string $name, string $date, string $time): Booking
+    {
+        $guest = FullName::tryFrom($name);
+        Assert::assertNotNull($guest);
+        $result = (new PdoBookingRepository($this->database))->placeGuest($guest, $this->slot($date, $time), $this->site->booking->capacity, $staff->id, $this->clock->now());
+        Assert::assertSame(BookingStatus::Booked, $result->status);
+
+        return $result->booking();
+    }
+
+    /** La fascia del calendario, che deve esistere. */
+    public function slot(string $date, string $time): ScheduledSlot
     {
         $day = LocalDate::tryFrom($date);
         $start = SlotTime::tryFrom($time);
@@ -165,10 +203,8 @@ final class AccountFixture
         Assert::assertNotNull($start);
         $slot = BookingCalendar::forSite($this->site)->slot($day, $start);
         Assert::assertNotNull($slot, sprintf('Nessuna fascia il %s alle %s.', $date, $time));
-        $result = (new PdoBookingRepository($this->database))->place($customer->id, $slot, $this->site->booking->capacity, null, $this->clock->now());
-        Assert::assertSame(BookingStatus::Booked, $result->status);
 
-        return $result->booking();
+        return $slot;
     }
 
     /** I posti presi di una fascia, letti dal database. */

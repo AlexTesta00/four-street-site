@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace FourStreet\Console;
 
+use FourStreet\Account\AdminRoles;
 use FourStreet\Account\Housekeeping;
+use FourStreet\Account\PdoUserRepository;
 use FourStreet\Account\Session\PdoSessionRepository;
 use FourStreet\Account\Token\PdoAccountTokenRepository;
 use FourStreet\Clock\Clock;
 use FourStreet\Clock\SystemClock;
 use FourStreet\Config\LocalConfig;
 use FourStreet\Config\SiteConfig;
+use FourStreet\Console\Command\AdminGrantCommand;
+use FourStreet\Console\Command\AdminListCommand;
+use FourStreet\Console\Command\AdminRevokeCommand;
 use FourStreet\Console\Command\MigrateCommand;
 use FourStreet\Console\Command\MigrationStatusCommand;
 use FourStreet\Console\Command\NotConfiguredCommand;
@@ -27,6 +32,16 @@ use Throwable;
  */
 final readonly class ConsoleApplication
 {
+    /** I comandi che usano il database: senza, spiegano come configurarlo. */
+    private const array DATABASE_COMMANDS = [
+        MigrateCommand::NAME => MigrateCommand::DESCRIPTION,
+        MigrationStatusCommand::NAME => MigrationStatusCommand::DESCRIPTION,
+        PruneCommand::NAME => PruneCommand::DESCRIPTION,
+        AdminGrantCommand::NAME => AdminGrantCommand::DESCRIPTION,
+        AdminRevokeCommand::NAME => AdminRevokeCommand::DESCRIPTION,
+        AdminListCommand::NAME => AdminListCommand::DESCRIPTION,
+    ];
+
     /**
      * @param list<Command> $commands
      */
@@ -52,25 +67,26 @@ final readonly class ConsoleApplication
     public static function create(string $appRoot, Clock $clock, ?Database $database): self
     {
         if ($database === null) {
-            return new self([
-                new NotConfiguredCommand(MigrateCommand::NAME, MigrateCommand::DESCRIPTION),
-                new NotConfiguredCommand(MigrationStatusCommand::NAME, MigrationStatusCommand::DESCRIPTION),
-                new NotConfiguredCommand(PruneCommand::NAME, PruneCommand::DESCRIPTION),
-            ]);
+            $commands = [];
+            foreach (self::DATABASE_COMMANDS as $name => $description) {
+                $commands[] = new NotConfiguredCommand($name, $description);
+            }
+
+            return new self($commands);
         }
 
         $migrator = new Migrator($database, $appRoot . '/database/migrations', $clock);
-        $housekeeping = new Housekeeping(
-            new PdoSessionRepository($database),
-            new PdoAccountTokenRepository($database),
-            new PdoRateLimitStore($database),
-            $clock,
-        );
+        $sessions = new PdoSessionRepository($database);
+        $housekeeping = new Housekeeping($sessions, new PdoAccountTokenRepository($database), new PdoRateLimitStore($database), $clock);
+        $roles = new AdminRoles(new PdoUserRepository($database), $sessions, $clock);
 
         return new self([
             new MigrateCommand($migrator),
             new MigrationStatusCommand($migrator),
             new PruneCommand($housekeeping),
+            new AdminGrantCommand($roles),
+            new AdminRevokeCommand($roles),
+            new AdminListCommand($roles),
         ]);
     }
 

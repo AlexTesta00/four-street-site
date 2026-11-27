@@ -74,7 +74,10 @@ final class ConsoleApplicationTest extends TestCase
             "Uso: php bin/console <comando>\n\nComandi:\n"
             . "  migrate         Applica al database le migrazioni che mancano (rilanciarlo non rifà nulla).\n"
             . "  migrate:status  Elenca le migrazioni e dice quali mancano.\n"
-            . "  prune           Cancella sessioni, link delle email e contatori dei tentativi scaduti.\n",
+            . "  prune           Cancella sessioni, link delle email e contatori dei tentativi scaduti.\n"
+            . "  admin:grant     Dà il ruolo di titolare a un account con l'email confermata: admin:grant <email>.\n"
+            . "  admin:revoke    Toglie il ruolo di titolare e chiude le sessioni dell'account: admin:revoke <email>.\n"
+            . "  admin:list      Elenca i titolari (gli account con il pannello delle prenotazioni).\n",
             $this->written($this->stdout),
         );
     }

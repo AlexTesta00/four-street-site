@@ -9,13 +9,16 @@ enum BookingStatus
     /** La fascia si può prenotare adesso, e questo è il posto che toccherebbe (il controllo prima di confermare). */
     case Available;
 
-    /** Prenotata: il posto è del cliente. */
+    /** Prenotata: il posto è della persona. */
     case Booked;
 
     /** Tutti i posti sono presi. */
     case Full;
 
-    /** Il cliente ha già una prenotazione attiva quel giorno: se ne ha una sola al giorno. */
+    /**
+     * Il cliente ha già una prenotazione attiva quel giorno (se ne ha una sola al giorno), oppure la persona
+     * senza account con quel nome è già in questa fascia.
+     */
     case AlreadyBooked;
 
     /** Il cliente ha già il massimo di prenotazioni future attive (booking.max_upcoming). */
@@ -26,6 +29,12 @@ enum BookingStatus
 
     /** Quel giorno a quell'ora non c'è nessuna fascia, o non è ancora fra quelle che si prenotano. */
     case NotFound;
+
+    /**
+     * Solo per il titolare: l'email non è di un cliente con l'email confermata, e per lui non si prenota.
+     * Si sa solo dopo il limite dei tentativi: il pannello non diventa un modo per scoprire chi ha un account.
+     */
+    case UnknownCustomer;
 
     /** Troppi tentativi in poco tempo: si aspetta. */
     case Throttled;
