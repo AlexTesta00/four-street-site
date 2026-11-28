@@ -1,10 +1,13 @@
-/* ---------- Le modifiche dell'orario: conferma e avviso ----------
+/* ---------- Le modifiche dell'orario: conferma e avviso; le disdette ----------
    La pagina di conferma di una modifica che toglie fasce con delle prenotazioni: per ogni giorno una scheda panel con
    la data e chi è prenotato, una persona per riga come nelle fasce del giorno (fs-roster), con l'orario in Bodoni al
    posto del posto, il nome grande e, sotto, l'email o "Senza account" (un indirizzo lungo va a capo). Sopra, la nota
    della chiusura, se c'è.
    Dentro l'avviso dopo la modifica (fs-alert) gli elenchi di chi va avvisato a mano: il nome in chiaro e, sotto,
-   l'email, il giorno e l'orario. */
+   l'email, il giorno e l'orario.
+   La pagina Disdette ha le stesse schede, con una riga in più per persona: com'è andata l'email della palestra, a
+   parole e con l'icona (il colore non è mai l'unico segnale): azzurro arrivata, corallo da avvisare o da mandare,
+   spento senza esito. */
 
 @layer components {
   .fs-changes {
@@ -80,6 +83,41 @@
     font-size: 14px;
     line-height: 20px;
     overflow-wrap: anywhere;
+  }
+
+  /* Le disdette: sotto l'email, l'esito dell'email della palestra */
+  .fs-changes__person--state {
+    grid-template-areas:
+      "time name"
+      "time meta"
+      "time state";
+  }
+  .fs-changes__state {
+    grid-area: state;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    min-width: 0;
+    padding-top: 2px;
+    color: var(--color-fg-muted);
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 500;
+  }
+  .fs-changes__state svg {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    margin-top: 2px;
+  }
+  .fs-changes__state--done {
+    color: var(--color-success);
+  }
+  .fs-changes__state--todo {
+    color: var(--color-danger);
+  }
+  .fs-changes__state--none {
+    color: var(--color-fg-subtle);
   }
 
   /* Gli elenchi dentro l'avviso: chi avvisare a mano */

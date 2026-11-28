@@ -67,8 +67,9 @@ final class AdminCancellationTest extends TestCase
         self::assertSame(303, $cancelled->status);
         self::assertSame('/gestione/?giorno=2026-12-07&avviso=prenotazione-disdetta&prenotazione=' . $booking->id, $cancelled->header('Location'));
         self::assertSame('', $this->fixture->seats('2026-12-07', '18:30'), 'Il posto è tornato libero.');
-        $row = $this->fixture->database->fetchOne('SELECT cancelled_by FROM bookings WHERE id = :id', ['id' => $booking->id]);
+        $row = $this->fixture->database->fetchOne('SELECT cancelled_by, gym_email FROM bookings WHERE id = :id', ['id' => $booking->id]);
         self::assertSame('admin', $row?->nullableString('cancelled_by'));
+        self::assertSame('sent', $row->nullableString('gym_email'), 'L\'esito dell\'email resta nel database.');
 
         $day = $this->browser->follow($cancelled);
         self::assertStringContainsString('<p class="fs-alert__title">Prenotazione disdetta</p>', $day->body);
@@ -171,9 +172,31 @@ final class AdminCancellationTest extends TestCase
         $cancelled = $this->browser->post('/gestione/prenotazioni/' . $booking->id . '/disdici/');
 
         self::assertSame('/gestione/?giorno=2026-12-07&avviso=prenotazione-disdetta-senza-email&prenotazione=' . $booking->id, $cancelled->header('Location'));
-        self::assertStringContainsString('Il posto è tornato libero. L&#039;email di avviso non è partita: avvisalo tu.', $this->browser->follow($cancelled)->body);
+        self::assertStringContainsString('Il posto è tornato libero. L&#039;email di avviso non è partita: rimandala da Disdette, oppure avvisalo tu.', $this->browser->follow($cancelled)->body);
         self::assertSame('', $this->fixture->seats('2026-12-07', '18:30'));
         self::assertCount(1, $this->fixture->reporter->reported);
+        // L'esito resta nel database: la pagina Disdette lo sa, e la rimanda.
+        self::assertSame('failed', $this->fixture->database->fetchOne('SELECT gym_email FROM bookings WHERE id = :id', ['id' => $booking->id])?->nullableString('gym_email'));
+        self::assertStringContainsString('Email non partita: da rimandare, o da avvisare tu', $this->browser->get('/gestione/disdette/')->body);
+    }
+
+    public function testTheNoticeSaysHowTheEmailIsNowNotHowItWasAtTheRedirect(): void
+    {
+        $booking = $this->fixture->book($this->fixture->customer('anna@example.test', 'Anna Bianchi'), '2026-12-07', '18:30');
+        $this->fixture->mailer->failing = true;
+        $cancelled = $this->browser->post('/gestione/prenotazioni/' . $booking->id . '/disdici/');
+        $location = (string) $cancelled->header('Location');
+        $this->fixture->mailer->failing = false;
+
+        // Presa nello stesso istante da un altro invio (in invio): non è ancora partita.
+        $this->fixture->database->execute("UPDATE bookings SET gym_email = 'sending' WHERE id = :id", ['id' => $booking->id]);
+        self::assertStringContainsString('Il posto è tornato libero. L&#039;email di avviso non è ancora partita: controlla in Disdette.', $this->browser->get($location)->body);
+
+        // Rimandata dalla pagina Disdette: lo stesso indirizzo dice che è partita.
+        $this->fixture->database->execute("UPDATE bookings SET gym_email = 'failed' WHERE id = :id", ['id' => $booking->id]);
+        self::assertSame(303, $this->browser->post('/gestione/disdette/')->status);
+        self::assertStringContainsString('Anna Bianchi, lunedì 7 dicembre alle 18:30. Il posto è tornato libero. Gli abbiamo mandato un&#039;email per avvisarlo.', $this->browser->get($location)->body);
+        self::assertCount(1, $this->fixture->mailer->sentTo('anna@example.test'));
     }
 
     /**

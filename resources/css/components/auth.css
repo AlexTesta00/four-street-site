@@ -22,6 +22,12 @@
     aspect-ratio: 2 / 1;
     width: 100%;
   }
+  /* La navigazione di una sezione (il pannello del titolare), sopra il titolo: fino al titolo lo spazio di una colonna
+     (24px), non il passo della griglia. Può essere più larga dello schermo: scorre lei, mai la pagina. */
+  .fs-auth__nav {
+    min-width: 0;
+    margin-bottom: -8px;
+  }
   .fs-auth__body {
     display: flex;
     flex-direction: column;
@@ -136,6 +142,12 @@
     .fs-auth__logo {
       aspect-ratio: 1;
       align-self: start;
+    }
+    /* La colonna del contenuto è troppo stretta per tutte le voci: la riga va a tutta larghezza, sopra il logo e il
+       contenuto, e fino a loro c'è lo spazio di prima (32px), non il passo della griglia */
+    .fs-auth__nav {
+      grid-column: 1 / -1;
+      margin-bottom: calc(32px - var(--gutter));
     }
     .fs-auth__body {
       max-width: 480px;

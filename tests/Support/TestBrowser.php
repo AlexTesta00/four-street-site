@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace FourStreet\Tests\Support;
 
+use Closure;
 use FourStreet\Application;
 use FourStreet\Http\Request;
 use FourStreet\Http\Response;
@@ -12,15 +13,20 @@ use PHPUnit\Framework\Assert;
 /**
  * Un browser finto davanti all'applicazione vera: tiene i cookie fra una richiesta e l'altra
  * (Set-Cookie, Max-Age=0 per cancellare) e manda i moduli come farebbe dalla pagina del sito,
- * con il token CSRF del suo cookie e Sec-Fetch-Site: same-origin.
+ * con il token CSRF del suo cookie e Sec-Fetch-Site: same-origin. Ogni richiesta ha un'Application nuova, come
+ * in index.php: ciò che un'Application tiene per la sua richiesta (l'orario letto, le email in coda, il tempo degli
+ * invii delle email della palestra) non passa alla successiva.
  */
 final class TestBrowser
 {
     /** @var array<string, string> */
     private array $cookies = [];
 
+    /**
+     * @param Closure(): Application $application un'Application nuova, sullo stesso database e la stessa posta
+     */
     public function __construct(
-        private readonly Application $application,
+        private readonly Closure $application,
         private readonly string $remoteAddress = '203.0.113.7',
     ) {}
 
@@ -109,11 +115,12 @@ final class TestBrowser
         return [];
     }
 
-    /** Una richiesta come in index.php: la risposta, poi il lavoro rimandato (le email in coda). */
+    /** Una richiesta come in index.php: un'Application sua, la risposta, poi il lavoro rimandato (le email in coda). */
     private function send(Request $request): Response
     {
-        $response = $this->application->handle($request);
-        $this->application->finish();
+        $application = ($this->application)();
+        $response = $application->handle($request);
+        $application->finish();
         foreach (self::setCookieHeaders($response) as $line) {
             $pair = strstr($line, ';', true);
             $pair = $pair === false ? $line : $pair;

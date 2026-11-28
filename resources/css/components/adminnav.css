@@ -1,9 +1,10 @@
 /* ---------- Navigazione del pannello del titolare ----------
-   In cima a ogni pagina del pannello: Oggi, Calendario, Orari, Chiusure, Impostazioni, in maiuscoletto.
+   In cima a ogni pagina del pannello: Oggi, Calendario, Orari, Chiusure, Disdette, Impostazioni, in maiuscoletto.
    Una riga sola. Sul telefono è larga fino ai bordi dello schermo e scorre di lato: la voce tagliata al bordo
    dice che c'è altro (niente barra di scorrimento), e lo script porta in vista la voce corrente.
    Voci alte 48px; la corrente in chiaro con il filetto oro sotto, le altre spente. Il focus è dentro la voce:
-   un anello fuori dalla riga verrebbe tagliato dallo scorrimento. */
+   un anello fuori dalla riga verrebbe tagliato dallo scorrimento.
+   Dove sta la riga lo decide il layout (fs-auth__nav): da lg è a tutta larghezza, sopra il logo e il contenuto. */
 
 @layer components {
   .fs-adminnav {
@@ -62,7 +63,7 @@
     background: var(--color-accent);
   }
 
-  /* Da lg il contenuto è una colonna accanto al logo: la riga sta dentro la colonna */
+  /* Da lg la riga sta nel contenuto della pagina, allineata al logo: niente più bordi dello schermo */
   @media (min-width: 1024px) {
     .fs-adminnav {
       margin-inline: 0;

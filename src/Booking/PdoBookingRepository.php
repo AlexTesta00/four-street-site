@@ -11,6 +11,7 @@ use FourStreet\Account\FullName;
 use FourStreet\Database\Database;
 use FourStreet\Database\Row;
 use FourStreet\Database\UtcDateTime;
+use LogicException;
 use PDOException;
 use RuntimeException;
 use UnexpectedValueException;
@@ -26,12 +27,14 @@ use UnexpectedValueException;
  * a scriverlo, e il vincolo UNIQUE (fascia, posto) ne fa passare uno solo. Chi perde riprova da capo,
  * in una transazione nuova (con MySQL in REPEATABLE READ una lettura nella stessa transazione non vedrebbe
  * il posto appena preso).
+ * L'email della palestra (gym_email) cambia stato solo con un UPDATE condizionato allo stato di prima: la disdetta la
+ * scrive in attesa, claimGymEmail() la prende (da in attesa o non partita), settleGymEmail() la chiude (da in invio).
  * Ogni segnaposto compare una volta sola per istruzione: MySQL, senza emulazione, non ne accetta di ripetuti.
  */
 final readonly class PdoBookingRepository implements BookingRepository
 {
     /** Le colonne di una prenotazione, come le legge booking(). */
-    private const array COLUMNS = ['id', 'user_id', 'guest_name', 'slot_date', 'slot_time', 'starts_at', 'seat', 'created_at', 'created_by', 'cancelled_at', 'cancelled_by'];
+    private const array COLUMNS = ['id', 'user_id', 'guest_name', 'slot_date', 'slot_time', 'starts_at', 'seat', 'created_at', 'created_by', 'cancelled_at', 'cancelled_by', 'gym_email'];
 
     /** Le prenotazioni con la loro persona: per un cliente registrato nome ed email dell'account. */
     private const string WITH_PERSON = ', u.full_name AS full_name, u.email AS email FROM bookings b LEFT JOIN users u ON u.id = b.user_id';
@@ -183,12 +186,50 @@ final readonly class PdoBookingRepository implements BookingRepository
         ));
     }
 
+    public function upcomingGymCancellations(LocalDate $today, DateTimeImmutable $now): array
+    {
+        // Il giorno basta all'indice (UNIQUE (slot_date, …)); l'istante dice quali fasce non sono ancora cominciate.
+        return array_map(self::entry(...), $this->database->fetchAll(
+            'SELECT ' . self::columns('b') . self::WITH_PERSON
+            . ' WHERE b.slot_date >= :from_date AND b.cancelled_by = :cancelled_by AND b.starts_at > :now'
+            . ' ORDER BY b.slot_date, b.slot_time, b.id',
+            ['from_date' => $today->value, 'cancelled_by' => CancelledBy::Admin->value, 'now' => UtcDateTime::format($now)],
+        ));
+    }
+
     public function cancel(int $id, DateTimeImmutable $at, CancelledBy $by): bool
     {
+        // Disdetta dalla palestra, l'email è dovuta solo a chi ha l'account: per una persona senza account resta NULL.
         return $this->database->execute(
-            'UPDATE bookings SET seat = NULL, active = NULL, cancelled_at = :cancelled_at, cancelled_by = :cancelled_by WHERE id = :id AND active = 1',
-            ['cancelled_at' => UtcDateTime::format($at), 'cancelled_by' => $by->value, 'id' => $id],
+            'UPDATE bookings SET seat = NULL, active = NULL, cancelled_at = :cancelled_at, cancelled_by = :cancelled_by,'
+            . ' gym_email = CASE WHEN user_id IS NULL THEN NULL ELSE :gym_email END WHERE id = :id AND active = 1',
+            [
+                'cancelled_at' => UtcDateTime::format($at),
+                'cancelled_by' => $by->value,
+                'gym_email' => $by === CancelledBy::Admin ? GymEmail::Pending->value : null,
+                'id' => $id,
+            ],
         ) > 0;
+    }
+
+    public function claimGymEmail(int $id): bool
+    {
+        return $this->database->execute(
+            'UPDATE bookings SET gym_email = :sending WHERE id = :id AND gym_email IN (:pending, :failed)',
+            ['sending' => GymEmail::Sending->value, 'id' => $id, 'pending' => GymEmail::Pending->value, 'failed' => GymEmail::Failed->value],
+        ) > 0;
+    }
+
+    public function settleGymEmail(int $id, GymEmail $result): void
+    {
+        if ($result !== GymEmail::Sent && $result !== GymEmail::Failed) {
+            throw new LogicException(sprintf('Un invio finisce partito o non partito, non "%s".', $result->value));
+        }
+
+        $this->database->execute(
+            'UPDATE bookings SET gym_email = :result WHERE id = :id AND gym_email = :sending',
+            ['result' => $result->value, 'id' => $id, 'sending' => GymEmail::Sending->value],
+        );
     }
 
     /**
@@ -348,6 +389,7 @@ final readonly class PdoBookingRepository implements BookingRepository
     {
         $createdBy = $row->string('created_by');
         $cancelledBy = $row->nullableString('cancelled_by');
+        $gymEmail = $row->nullableString('gym_email');
 
         return new Booking(
             id: $row->int('id'),
@@ -363,6 +405,8 @@ final readonly class PdoBookingRepository implements BookingRepository
             cancelledAt: $row->nullableDateTime('cancelled_at'),
             cancelledBy: $cancelledBy === null ? null : (CancelledBy::tryFrom($cancelledBy)
                 ?? throw new UnexpectedValueException(sprintf('Autore della disdetta sconosciuto nel database: "%s".', $cancelledBy))),
+            gymEmail: $gymEmail === null ? null : (GymEmail::tryFrom($gymEmail)
+                ?? throw new UnexpectedValueException(sprintf('Stato dell\'email della palestra sconosciuto nel database: "%s".', $gymEmail))),
         );
     }
 

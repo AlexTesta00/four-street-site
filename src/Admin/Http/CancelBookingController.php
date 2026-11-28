@@ -50,6 +50,7 @@ final readonly class CancelBookingController implements Controller
         $result = $this->cancellation->cancel(Visitor::of($request)->user(), $id);
 
         return match ($result->status) {
+            // Com'è andata l'email, la pagina la rilegge dal database (AdminNotice): l'indirizzo vale solo se non lo sa.
             CancellationStatus::Cancelled => Response::seeOther(AdminUrls::day(
                 $result->booking()->date,
                 $result->email() === EmailDelivery::Failed ? AdminNotice::CancelledWithoutEmail : AdminNotice::Cancelled,

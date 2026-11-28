@@ -31,7 +31,8 @@ use PHPUnit\Framework\Assert;
 
 /**
  * L'applicazione vera con l'area clienti e le prenotazioni attive: database dei test (SQLite in memoria),
- * posta in memoria, bcrypt con il costo minimo e un orologio che il test può spostare.
+ * posta in memoria, bcrypt con il costo minimo e un orologio che il test può spostare. Come in produzione,
+ * ogni richiesta ha la sua Application (application()), sempre sullo stesso database e la stessa posta.
  */
 final class AccountFixture
 {
@@ -51,7 +52,7 @@ final class AccountFixture
 
     public readonly SiteConfig $site;
 
-    public readonly Application $application;
+    private readonly Backend $backend;
 
     /**
      * @param string $origin indirizzo pubblico: https dà cookie Secure con il prefisso __Host-
@@ -64,26 +65,32 @@ final class AccountFixture
         $this->database = $database ?? TestDatabase::create($this->clock);
         $this->reporter = new CollectingReporter();
         $this->site = SiteFixture::config($site);
-        $this->application = Application::create(
+        $this->backend = new Backend(
+            $this->database,
+            $this->mailer,
+            NativePasswordHasher::bcrypt(4),
+            Origin::fromUrl($origin),
+            str_repeat('chiave-di-prova-', 3),
+        );
+    }
+
+    /** L'Application di una richiesta, come la crea index.php: una nuova ogni volta. */
+    public function application(): Application
+    {
+        return Application::create(
             $this->site,
             SiteFixture::templateDirectory(),
             SiteFixture::PUBLIC_DIR,
             $this->clock,
             SiteFixture::mtimes(),
             $this->reporter,
-            new Backend(
-                $this->database,
-                $this->mailer,
-                NativePasswordHasher::bcrypt(4),
-                Origin::fromUrl($origin),
-                str_repeat('chiave-di-prova-', 3),
-            ),
+            $this->backend,
         );
     }
 
     public function browser(string $remoteAddress = '203.0.113.7'): TestBrowser
     {
-        return new TestBrowser($this->application, $remoteAddress);
+        return new TestBrowser($this->application(...), $remoteAddress);
     }
 
     /**

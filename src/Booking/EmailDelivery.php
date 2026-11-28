@@ -15,4 +15,10 @@ enum EmailDelivery
 
     /** Nessuna email da mandare: la persona non ha un account, quindi nemmeno un indirizzo (la avvisa la palestra). */
     case NoAddress;
+
+    /**
+     * Non partita da questa richiesta, e ancora dovuta: l'email della palestra (GymEmail) l'ha presa un altro invio
+     * nello stesso istante. Com'è finita lo dice la pagina Disdette.
+     */
+    case Pending;
 }

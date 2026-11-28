@@ -88,9 +88,36 @@ interface BookingRepository
     public function findEntries(array $ids): array;
 
     /**
-     * Disdice una prenotazione attiva: il posto si libera, la prenotazione resta come storico.
+     * Le prenotazioni disdette dalla palestra la cui fascia deve ancora cominciare (dopo $now), con le loro persone e
+     * com'è andata l'email della palestra, per giorno, fascia e numero: una lettura sola. Per la pagina Disdette.
+     *
+     * @param LocalDate $today il giorno di $now nel fuso del sito: la lettura parte da lì (l'indice comincia dal giorno)
+     *
+     * @return list<RosterEntry>
+     */
+    public function upcomingGymCancellations(LocalDate $today, DateTimeImmutable $now): array;
+
+    /**
+     * Disdice una prenotazione attiva: il posto si libera, la prenotazione resta come storico. Se la disdice la palestra
+     * a un cliente registrato, gli è dovuta l'email della palestra: nella stessa istruzione l'email parte in attesa
+     * (GymEmail::Pending), prima di ogni invio. Chi non ha l'account non ha email, né stato.
      *
      * @return bool false se non era attiva (già disdetta, o inesistente)
      */
     public function cancel(int $id, DateTimeImmutable $at, CancelledBy $by): bool;
+
+    /**
+     * Prende l'email della palestra di una disdetta per mandarla: da in attesa o non partita a in invio, in un passo solo.
+     * Con due richieste insieme il database ne fa vincere una sola, e solo quella la manda.
+     *
+     * @return bool false se non c'era da mandarla: l'ha già presa un'altra richiesta, è già partita, o non è dovuta
+     */
+    public function claimGymEmail(int $id): bool;
+
+    /**
+     * Com'è finito l'invio preso con claimGymEmail(): da in invio a partita o non partita.
+     *
+     * @param GymEmail $result GymEmail::Sent oppure GymEmail::Failed
+     */
+    public function settleGymEmail(int $id, GymEmail $result): void;
 }

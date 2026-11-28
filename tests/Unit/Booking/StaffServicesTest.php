@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace FourStreet\Tests\Unit\Booking;
 
+use DateTimeImmutable;
 use FourStreet\Account\EmailAddress;
 use FourStreet\Account\FullName;
 use FourStreet\Account\NewUser;
@@ -13,17 +14,21 @@ use FourStreet\Asset\AssetUrls;
 use FourStreet\Booking\BookingCalendar;
 use FourStreet\Booking\BookingEmails;
 use FourStreet\Booking\BookingNotifier;
+use FourStreet\Booking\BookingRepository;
 use FourStreet\Booking\BookingStatus;
 use FourStreet\Booking\CancellationStatus;
 use FourStreet\Booking\CancelledBy;
 use FourStreet\Booking\CreatedBy;
 use FourStreet\Booking\EmailDelivery;
+use FourStreet\Booking\GymEmail;
 use FourStreet\Booking\LocalDate;
 use FourStreet\Booking\PdoBookingRepository;
 use FourStreet\Booking\ScheduledSlot;
 use FourStreet\Booking\SlotTime;
 use FourStreet\Booking\Staff\DayChoice;
 use FourStreet\Booking\Staff\DayRoster;
+use FourStreet\Booking\Staff\GymEmailRound;
+use FourStreet\Booking\Staff\GymEmailSender;
 use FourStreet\Booking\Staff\RosterDay;
 use FourStreet\Booking\Staff\RosterSlot;
 use FourStreet\Booking\Staff\SlotPhase;
@@ -39,6 +44,7 @@ use FourStreet\Security\Fingerprinter;
 use FourStreet\Security\RateLimit\PdoRateLimitStore;
 use FourStreet\Security\RateLimit\RateLimiter;
 use FourStreet\Tests\Support\CollectingReporter;
+use FourStreet\Tests\Support\ForwardingBookings;
 use FourStreet\Tests\Support\InMemoryMailer;
 use FourStreet\Tests\Support\MovableClock;
 use FourStreet\Tests\Support\SiteFixture;
@@ -46,6 +52,7 @@ use FourStreet\Tests\Support\TestDatabase;
 use FourStreet\Text\ItalianDateFormatter;
 use FourStreet\View\Icons;
 use FourStreet\View\View;
+use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
@@ -57,6 +64,8 @@ use PHPUnit\Framework\TestCase;
 #[Group('database')]
 #[CoversClass(StaffBooking::class)]
 #[CoversClass(StaffCancellation::class)]
+#[CoversClass(GymEmailSender::class)]
+#[CoversClass(GymEmailRound::class)]
 #[CoversClass(StaffThrottle::class)]
 #[CoversClass(DayRoster::class)]
 #[CoversClass(RosterDay::class)]
@@ -229,8 +238,11 @@ final class StaffServicesTest extends TestCase
         self::assertSame(CancellationStatus::Cancelled, $result->status);
         self::assertSame(EmailDelivery::Sent, $result->email());
         self::assertSame(1, $result->booking()->seat(), 'L\'esito ha la prenotazione com\'era prima della disdetta.');
-        self::assertSame(CancelledBy::Admin, $this->bookings->find($id)?->cancelledBy);
+        $cancelled = $this->bookings->find($id) ?? self::fail();
+        self::assertSame(CancelledBy::Admin, $cancelled->cancelledBy);
+        self::assertSame(GymEmail::Sent, $cancelled->gymEmail, 'L\'esito dell\'email resta nel database.');
         self::assertSame('Prenotazione disdetta dalla palestra: lunedì 7 dicembre, ore 18:30', $this->mailer->lastTo('anna@example.test')->subject);
+        self::assertStringContainsString('dalle 18:30 alle 19:30. Ci dispiace per il cambio di programma.', $this->mailer->lastTo('anna@example.test')->text, 'Nessun perché, come sempre per una disdetta sola.');
 
         self::assertNull($cancellation->cancellable($id), 'Già disdetta.');
         self::assertSame(CancellationStatus::AlreadyCancelled, $cancellation->cancel($this->staff, $id)->status);
@@ -253,6 +265,7 @@ final class StaffServicesTest extends TestCase
         self::assertSame(CancellationStatus::Cancelled, $result->status);
         self::assertSame(EmailDelivery::NoAddress, $result->email());
         self::assertSame([], $this->mailer->sent);
+        self::assertNull($this->bookings->find($guest->id)?->gymEmail, 'Chi non ha l\'account non ha un\'email, né uno stato.');
     }
 
     public function testACancellationStandsEvenIfTheEmailDoesNotLeave(): void
@@ -264,9 +277,34 @@ final class StaffServicesTest extends TestCase
 
         self::assertSame(CancellationStatus::Cancelled, $result->status);
         self::assertSame(EmailDelivery::Failed, $result->email());
-        self::assertFalse($this->bookings->find($id)?->isActive());
+        $cancelled = $this->bookings->find($id) ?? self::fail();
+        self::assertFalse($cancelled->isActive());
+        self::assertSame(GymEmail::Failed, $cancelled->gymEmail, 'Non partita: la pagina Disdette la rimanda.');
         self::assertCount(1, $this->reporter->reported);
         self::assertInstanceOf(MailNotSent::class, $this->reporter->reported[0]);
+    }
+
+    public function testAnEmailTakenAtTheSameMomentByAnotherSendIsLeftToIt(): void
+    {
+        $id = $this->place($this->user('anna@example.test'), '2026-12-07', '18:30');
+        // Appena scritta la disdetta (in attesa), "Invia le email rimaste" da un altro telefono prende l'email per primo.
+        $bookings = new class ($this->bookings) extends ForwardingBookings {
+            public function cancel(int $id, DateTimeImmutable $at, CancelledBy $by): bool
+            {
+                $cancelled = parent::cancel($id, $at, $by);
+                Assert::assertTrue($this->inner->claimGymEmail($id));
+
+                return $cancelled;
+            }
+        };
+        $cancellation = new StaffCancellation($bookings, $this->sender($this->calendar([]), $bookings), $this->limiter(), $this->clock);
+
+        $result = $cancellation->cancel($this->staff, $id);
+
+        self::assertSame(CancellationStatus::Cancelled, $result->status);
+        self::assertSame(EmailDelivery::Pending, $result->email(), 'Non è partita da qui: la manda l\'altro invio.');
+        self::assertSame([], $this->mailer->sent, 'Mai due email per la stessa disdetta.');
+        self::assertSame(GymEmail::Sending, $this->bookings->find($id)?->gymEmail);
     }
 
     public function testTheDayOfTheGymWithItsSlotsAndWhatCanBeDone(): void
@@ -385,7 +423,13 @@ final class StaffServicesTest extends TestCase
      */
     private function staffCancellation(array $rules = []): StaffCancellation
     {
-        return new StaffCancellation($this->bookings, new PdoUserRepository($this->database), $this->notifier($this->calendar($rules)), $this->limiter(), $this->clock);
+        return new StaffCancellation($this->bookings, $this->sender($this->calendar($rules)), $this->limiter(), $this->clock);
+    }
+
+    /** Le email della palestra di una richiesta, come le collega AdminModule. */
+    private function sender(BookingCalendar $calendar, ?BookingRepository $bookings = null): GymEmailSender
+    {
+        return new GymEmailSender($bookings ?? $this->bookings, new PdoUserRepository($this->database), $this->emails($calendar), $this->notifier($calendar), $this->clock);
     }
 
     private function roster(): DayRoster
@@ -417,13 +461,14 @@ final class StaffServicesTest extends TestCase
 
     private function notifier(BookingCalendar $calendar): BookingNotifier
     {
+        return new BookingNotifier($this->emails($calendar), $this->mailer, $this->reporter);
+    }
+
+    private function emails(BookingCalendar $calendar): BookingEmails
+    {
         $view = new View(SiteFixture::templateDirectory(), new AssetUrls(SiteFixture::PUBLIC_DIR, SiteFixture::mtimes()), new Icons());
 
-        return new BookingNotifier(
-            new BookingEmails(new MailTemplates($view), Origin::fromUrl('https://fourstreet.studio'), $this->site([]), new ItalianDateFormatter(), $calendar),
-            $this->mailer,
-            $this->reporter,
-        );
+        return new BookingEmails(new MailTemplates($view), Origin::fromUrl('https://fourstreet.studio'), $this->site([]), new ItalianDateFormatter(), $calendar);
     }
 
     private function limiter(): RateLimiter

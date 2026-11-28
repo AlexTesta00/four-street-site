@@ -38,6 +38,9 @@ final class AdminUrls
     /** Le chiusure: l'elenco e il modulo (GET), una chiusura nuova o una riapertura (POST). */
     public const string CLOSURES = '/gestione/chiusure/';
 
+    /** Le disdette della palestra con com'è andata l'email: l'elenco (GET) e "Invia le email rimaste" (POST). */
+    public const string CANCELLATIONS = '/gestione/disdette/';
+
     /** Le regole delle prenotazioni che il titolare cambia: il modulo (GET) e il salvataggio (POST). */
     public const string SETTINGS = '/gestione/impostazioni/';
 

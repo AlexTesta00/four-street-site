@@ -5,13 +5,12 @@ declare(strict_types=1);
 namespace FourStreet\Booking\Staff;
 
 use FourStreet\Account\User;
-use FourStreet\Account\UserRepository;
 use FourStreet\Booking\Booking;
-use FourStreet\Booking\BookingNotifier;
 use FourStreet\Booking\BookingRepository;
 use FourStreet\Booking\CancellationResult;
 use FourStreet\Booking\CancelledBy;
 use FourStreet\Booking\EmailDelivery;
+use FourStreet\Booking\GymEmail;
 use FourStreet\Booking\RosterEntry;
 use FourStreet\Clock\Clock;
 use FourStreet\Security\RateLimit\RateLimiter;
@@ -21,16 +20,19 @@ use FourStreet\Security\RateLimit\RateLimiter;
  * o di una persona senza account, anche quando per il cliente la disdetta è già chiusa
  * (cancel_closes_minutes_before vale solo per lui). Il posto si libera subito.
  *
- * Al cliente registrato arriva subito l'email che a disdire è stata la palestra; una persona senza account
- * non ha un indirizzo, e la avvisa il titolare. Lo stesso modulo inviato di nuovo non cambia nulla e non
- * manda email; anche una prenotazione disdetta nel frattempo dal cliente è "già disdetta".
+ * Al cliente registrato arriva subito l'email che a disdire è stata la palestra, con lo stato nel database: la disdetta
+ * la scrive in attesa, poi GymEmailSender la manda e la segna partita o non partita (se non parte, la pagina Disdette
+ * la rimanda). Una persona senza account non ha un indirizzo, e la avvisa il titolare. Lo stesso modulo inviato di nuovo
+ * non cambia nulla e non manda email; anche una prenotazione disdetta nel frattempo dal cliente è "già disdetta".
  */
 final readonly class StaffCancellation
 {
+    /**
+     * @param GymEmailSender $emails le email della palestra, lo stesso per tutta la richiesta
+     */
     public function __construct(
         private BookingRepository $bookings,
-        private UserRepository $users,
-        private BookingNotifier $notifier,
+        private GymEmailSender $emails,
         private RateLimiter $limiter,
         private Clock $clock,
     ) {}
@@ -44,8 +46,9 @@ final readonly class StaffCancellation
     }
 
     /**
-     * Disdice la prenotazione e avvisa il cliente registrato. Esiti: Cancelled (con l'email, o NoAddress per chi
-     * non ha l'account), AlreadyCancelled, NotFound (non c'è, oppure la fascia è iniziata), Throttled.
+     * Disdice la prenotazione e avvisa il cliente registrato. Esiti: Cancelled (con l'email: Sent, Failed, Pending se
+     * l'ha presa nello stesso istante un altro invio, NoAddress per chi non ha l'account), AlreadyCancelled, NotFound
+     * (non c'è, oppure la fascia è iniziata), Throttled.
      */
     public function cancel(User $staff, int $bookingId): CancellationResult
     {
@@ -80,8 +83,16 @@ final readonly class StaffCancellation
 
     private function notify(Booking $booking): EmailDelivery
     {
-        $customer = $booking->userId === null ? null : $this->users->findById($booking->userId);
+        if ($booking->isGuest()) {
+            return EmailDelivery::NoAddress;
+        }
 
-        return $customer === null ? EmailDelivery::NoAddress : $this->notifier->cancelledByGym($customer, $booking);
+        // La disdetta di una prenotazione sola non dice un perché, come sempre: l'ha deciso il titolare.
+        return match ($this->emails->send([[$booking, null]])->of($booking->id)) {
+            GymEmail::Sent => EmailDelivery::Sent,
+            GymEmail::Failed => EmailDelivery::Failed,
+            // Presa nello stesso istante da "Invia le email rimaste": non è partita da qui, ed è ancora dovuta.
+            default => EmailDelivery::Pending,
+        };
     }
 }

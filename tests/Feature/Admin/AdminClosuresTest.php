@@ -162,7 +162,7 @@ final class AdminClosuresTest extends TestCase
         $closed = $this->browser->post(self::PAGE, [...$fields, 'prenotazioni' => $anna->id . ',' . $marco->id]);
 
         self::assertSame(303, $closed->status);
-        self::assertSame('/gestione/chiusure/?avviso=chiusura-salvata&disdette=2&senza-account=' . $marco->id, $closed->header('Location'));
+        self::assertSame('/gestione/chiusure/?avviso=chiusura-salvata&disdette=2&da-avvisare=' . $marco->id, $closed->header('Location'));
         self::assertSame('', $this->fixture->seats('2026-12-10', '18:30') . $this->fixture->seats('2026-12-11', '07:00'));
         self::assertSame('1', $this->fixture->seats('2026-12-12', '07:00'));
         self::assertSame(1, $this->fixture->database->fetchOne('SELECT active FROM bookings WHERE id = :id', ['id' => $luca->id])?->nullableInt('active'));
@@ -366,37 +366,54 @@ final class AdminClosuresTest extends TestCase
         self::assertSame(0, $this->fixture->count('schedule_days'));
     }
 
-    public function testTheNoticeShowsOnlyBookingsTheGymCancelledEachInItsList(): void
+    public function testTheNoticeShowsOnlyBookingsTheGymCancelledAsTheDatabaseHasThem(): void
     {
         $active = $this->fixture->book($this->fixture->customer('anna@example.test', 'Anna Bianchi'), '2026-12-07', '18:30');
         $customer = $this->fixture->book($this->fixture->customer('luca@example.test', 'Luca Verdi'), '2026-12-08', '18:30');
         $guest = $this->fixture->bookGuest($this->admin, 'Marco Neri', '2026-12-09', '07:00');
-        foreach ([$customer->id, $guest->id] as $id) {
+        $emailed = $this->fixture->book($this->fixture->customer('sara@example.test', 'Sara Neri'), '2026-12-10', '07:00');
+        foreach ([$customer->id => 'failed', $guest->id => null, $emailed->id => 'sent'] as $id => $email) {
             $this->fixture->database->execute(
-                "UPDATE bookings SET seat = NULL, active = NULL, cancelled_at = '2026-11-25 07:30:00', cancelled_by = 'admin' WHERE id = :id",
-                ['id' => $id],
+                "UPDATE bookings SET seat = NULL, active = NULL, cancelled_at = '2026-11-25 07:30:00', cancelled_by = 'admin', gym_email = :gym_email WHERE id = :id",
+                ['gym_email' => $email, 'id' => $id],
             );
         }
 
-        // Ognuno nel suo elenco: un cliente registrato non è "senza account", una persona senza account non ha un'email.
-        $swapped = $this->browser->get(self::PAGE . '?avviso=chiusura-salvata&disdette=3&senza-account=' . $active->id . ',' . $customer->id . '&senza-email=' . $guest->id);
-        self::assertSame(200, $swapped->status);
-        self::assertStringContainsString('<p class="fs-alert__title">Chiusura salvata</p>', $swapped->body);
-        self::assertStringContainsString('<p>3 prenotazioni disdette. Ai clienti registrati è arrivata l&#039;email della palestra, con il motivo.</p>', $swapped->body);
-        foreach (['Anna Bianchi', 'Luca Verdi', 'Marco Neri'] as $name) {
-            self::assertStringNotContainsString($name, $swapped->body);
-        }
+        // L'indirizzo porta solo numeri: chi non ha l'account, e a chi l'email non è arrivata, lo dice il database.
+        // Una prenotazione attiva non c'entra; una con l'email partita non è da avvisare.
+        $uri = self::PAGE . '?avviso=chiusura-salvata&disdette=5&da-avvisare=' . implode(',', [$active->id, $customer->id, $guest->id, $emailed->id]);
+        $page = $this->browser->get($uri);
+        self::assertSame(200, $page->status);
+        self::assertStringContainsString('<p class="fs-alert__title">Chiusura salvata</p>', $page->body);
+        self::assertStringContainsString('<p>5 prenotazioni disdette. Agli altri clienti registrati è arrivata l&#039;email della palestra, con il motivo.</p>', $page->body);
+        self::assertStringContainsString('<p class="fs-changes__lead">Senza account, da avvisare tu:</p>' . "\n" . '    <ul class="fs-changes__list">' . "\n" . '      <li class="fs-changes__item"><span class="fs-changes__who">Marco Neri</span> <span class="fs-changes__when">mercoledì 9 dicembre, 07:00</span></li>', $page->body);
+        self::assertStringContainsString('<p class="fs-changes__lead">L\'email non è ancora arrivata:</p>' . "\n" . '    <ul class="fs-changes__list">' . "\n" . '      <li class="fs-changes__item"><span class="fs-changes__who">Luca Verdi</span> <span class="fs-changes__when">luca@example.test · martedì 8 dicembre, 18:30 · non partita</span></li>', $page->body);
+        self::assertStringContainsString('<p>L&#039;email la mandi dalla pagina Disdette; se preferisci, avvisa tu quel cliente.</p>', $page->body);
+        self::assertStringContainsString('<a href="/gestione/disdette/" class="fs-btn fs-btn--secondary fs-btn--sm mt-2 self-start">Vai alle disdette</a>', $page->body);
+        self::assertStringNotContainsString('Anna Bianchi', $page->body);
+        self::assertStringNotContainsString('Sara Neri', $page->body);
 
-        $right = $this->browser->get(self::PAGE . '?avviso=chiusura-salvata&disdette=5&senza-account=' . $guest->id . '&senza-email=' . $customer->id);
-        self::assertStringContainsString('<p>5 prenotazioni disdette. Agli altri clienti registrati è arrivata l&#039;email della palestra, con il motivo.</p>', $right->body);
-        self::assertStringContainsString('<span class="fs-changes__who">Marco Neri</span> <span class="fs-changes__when">mercoledì 9 dicembre, 07:00</span>', $right->body);
-        self::assertStringContainsString('<span class="fs-changes__who">Luca Verdi</span> <span class="fs-changes__when">luca@example.test · martedì 8 dicembre, 18:30</span>', $right->body);
+        // Presa da un invio che si è interrotto (o che sta ancora mandando): non si sa se è arrivata, e non si rimanda.
+        $this->fixture->database->execute("UPDATE bookings SET gym_email = 'sending' WHERE id = :id", ['id' => $customer->id]);
+        $sending = $this->browser->get($uri)->body;
+        self::assertStringContainsString('<span class="fs-changes__when">luca@example.test · martedì 8 dicembre, 18:30 · in invio o interrotta</span>', $sending);
+        self::assertStringContainsString('<p>Di un&#039;email in invio o interrotta non si sa se è arrivata: avvisa tu quel cliente.</p>', $sending);
+        self::assertStringContainsString('Vai alle disdette</a>', $sending);
 
-        // Cinquanta numeri in un elenco: forse non c'è tutto, e l'avviso lo dice.
+        // Rimandata nel frattempo dalla pagina Disdette, l'email di Luca è arrivata: l'avviso, riaperto, dice com'è adesso.
+        $this->fixture->database->execute("UPDATE bookings SET gym_email = 'sent' WHERE id = :id", ['id' => $customer->id]);
+        $later = $this->browser->get($uri)->body;
+        self::assertStringContainsString('<p>5 prenotazioni disdette. Ai clienti registrati è arrivata l&#039;email della palestra, con il motivo.</p>', $later);
+        self::assertStringNotContainsString('Luca Verdi', $later);
+        self::assertStringContainsString('Marco Neri', $later);
+        self::assertStringNotContainsString('Vai alle disdette', $later, 'Nessuna email da mandare: chi non ha l\'account lo avvisa il titolare.');
+
+        // Cinquanta numeri nell'elenco: forse non c'è tutto, e l'avviso lo dice e porta alla pagina con tutti.
         $many = implode(',', range(1000, 1049));
-        $partial = $this->browser->get(self::PAGE . '?avviso=chiusura-salvata&disdette=80&senza-email=' . $many)->body;
+        $partial = $this->browser->get(self::PAGE . '?avviso=chiusura-salvata&disdette=80&da-avvisare=' . $many)->body;
         self::assertStringContainsString('<p>80 prenotazioni disdette.</p>', $partial);
-        self::assertStringContainsString('<p>Gli elenchi arrivano al massimo a 50 persone: potrebbero essercene altre da avvisare.</p>', $partial);
+        self::assertStringContainsString('<p>L&#039;elenco arriva al massimo a 50 persone: potrebbero essercene altre da avvisare, e le trovi tutte in Disdette.</p>', $partial);
+        self::assertStringContainsString('Vai alle disdette</a>', $partial);
         self::assertSame([], $this->fixture->reporter->reported);
     }
 

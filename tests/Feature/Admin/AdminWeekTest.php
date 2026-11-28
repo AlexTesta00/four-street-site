@@ -308,7 +308,7 @@ final class AdminWeekTest extends TestCase
         // Nell'indirizzo solo numeri: né la nota né i nomi.
         self::assertSame(303, $closed->status);
         $location = (string) $closed->header('Location');
-        self::assertSame('/gestione/orari/settimana/?da=2026-12-07&aperto=2026-12-09&avviso=giorno-chiuso&disdette=3&senza-account=' . $marco->id . '&senza-email=' . $luca->id . '#giorno-2026-12-09', $location);
+        self::assertSame('/gestione/orari/settimana/?da=2026-12-07&aperto=2026-12-09&avviso=giorno-chiuso&disdette=3&da-avvisare=' . $marco->id . '%2C' . $luca->id . '#giorno-2026-12-09', $location);
         self::assertStringNotContainsString('ferie', $location);
         self::assertStringNotContainsString('Neri', $location);
         $plan = $this->fixture->calendar()->plan(self::date('2026-12-09'));
@@ -332,8 +332,14 @@ final class AdminWeekTest extends TestCase
         self::assertStringContainsString('<p>Il giorno non ha più fasce: nessuno lo prenota.</p>', $day);
         self::assertStringContainsString('<p>3 prenotazioni disdette. Agli altri clienti registrati è arrivata l&#039;email della palestra, con il motivo.</p>', $day);
         self::assertStringContainsString('<p class="fs-changes__lead">Senza account, da avvisare tu:</p>' . "\n" . '    <ul class="fs-changes__list">' . "\n" . '      <li class="fs-changes__item"><span class="fs-changes__who">Marco Neri</span> <span class="fs-changes__when">mercoledì 9 dicembre, 07:00</span></li>', $day);
-        self::assertStringContainsString('<p class="fs-changes__lead">L\'email non è partita, da avvisare tu:</p>' . "\n" . '    <ul class="fs-changes__list">' . "\n" . '      <li class="fs-changes__item"><span class="fs-changes__who">Luca Verdi</span> <span class="fs-changes__when">luca@example.test · mercoledì 9 dicembre, 12:30</span></li>', $day);
+        self::assertStringContainsString('<p class="fs-changes__lead">L\'email non è ancora arrivata:</p>' . "\n" . '    <ul class="fs-changes__list">' . "\n" . '      <li class="fs-changes__item"><span class="fs-changes__who">Luca Verdi</span> <span class="fs-changes__when">luca@example.test · mercoledì 9 dicembre, 12:30 · non partita</span></li>', $day);
+        // L'email non partita si rimanda: l'avviso porta alla pagina Disdette.
+        self::assertStringContainsString('<p>L&#039;email la mandi dalla pagina Disdette; se preferisci, avvisa tu quel cliente.</p>' . "\n" . '    <a href="/gestione/disdette/" class="fs-btn fs-btn--secondary fs-btn--sm mt-2 self-start">Vai alle disdette</a>', $day);
         self::assertStringNotContainsString('Anna Bianchi', $day);
+        self::assertSame(['sent', 'failed', null], array_map(
+            fn(int $id): ?string => $this->fixture->database->fetchOne('SELECT gym_email FROM bookings WHERE id = :id', ['id' => $id])?->nullableString('gym_email'),
+            [$anna->id, $luca->id, $marco->id],
+        ));
         self::assertStringContainsString('<span class="fs-hours__main">Chiuso · ferie di Natale</span>', $day);
 
         // Il cliente quel giorno non trova più fasce.

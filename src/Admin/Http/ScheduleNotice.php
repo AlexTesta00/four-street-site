@@ -4,15 +4,16 @@ declare(strict_types=1);
 
 namespace FourStreet\Admin\Http;
 
-use FourStreet\Booking\EmailDelivery;
+use FourStreet\Booking\GymEmail;
 use FourStreet\Booking\Schedule\CancelledBooking;
 use FourStreet\Http\Request;
 
 /**
  * Gli avvisi dopo una modifica dell'orario ("?avviso=giorno-chiuso"): il parametro sceglie solo fra questi testi fissi.
  * Se la modifica ha disdetto delle prenotazioni, l'indirizzo dice anche quante ("disdette=3") e porta i numeri di
- * quelle che il titolare deve avvisare a mano: le persone senza account ("senza-account=12,15") e i clienti a cui
- * l'email non è partita ("senza-email=40"). Nomi, email e note mai: li legge la pagina dal database (ChangeReport).
+ * quelle a cui non è arrivata l'email della palestra ("da-avvisare=12,15,40"): le persone senza account e i clienti
+ * con l'email non partita o rimasta in attesa. Chi è chi, e com'è l'email adesso, lo legge la pagina dal database
+ * (ChangeReport), come nomi ed email; una nota mai.
  */
 enum ScheduleNotice: string
 {
@@ -21,13 +22,10 @@ enum ScheduleNotice: string
     /** Quante prenotazioni ha disdetto la modifica. */
     public const string CANCELLED = 'disdette';
 
-    /** I numeri delle prenotazioni disdette di persone senza account: nessuna email, le avvisa il titolare. */
-    public const string WITHOUT_ACCOUNT = 'senza-account';
+    /** I numeri delle prenotazioni disdette a cui non è arrivata l'email della palestra. */
+    public const string NOT_EMAILED = 'da-avvisare';
 
-    /** I numeri delle prenotazioni disdette di clienti a cui l'email non è partita. */
-    public const string WITHOUT_EMAIL = 'senza-email';
-
-    /** Al più tanti numeri per elenco: l'indirizzo resta corto, e oltre il conto basta. */
+    /** Al più tanti numeri nell'elenco: l'indirizzo resta corto, e oltre il conto basta (la pagina Disdette ha tutto). */
     public const int MAX_LISTED = 50;
 
     case TimeAdded = 'orario-aggiunto';
@@ -83,7 +81,7 @@ enum ScheduleNotice: string
 
     /**
      * I parametri dell'indirizzo dopo la modifica: l'avviso e, se ha disdetto qualcosa, quante prenotazioni e i numeri
-     * di quelle da avvisare a mano (al più MAX_LISTED per elenco).
+     * di quelle a cui l'email della palestra non è arrivata (al più MAX_LISTED): senza account, non partita, in attesa.
      *
      * @param list<CancelledBooking> $cancelled
      *
@@ -97,16 +95,14 @@ enum ScheduleNotice: string
         }
 
         $query[self::CANCELLED] = (string) count($cancelled);
-        foreach ([self::WITHOUT_ACCOUNT => EmailDelivery::NoAddress, self::WITHOUT_EMAIL => EmailDelivery::Failed] as $parameter => $delivery) {
-            $ids = [];
-            foreach ($cancelled as $booking) {
-                if ($booking->email === $delivery && count($ids) < self::MAX_LISTED) {
-                    $ids[] = $booking->entry->booking->id;
-                }
+        $ids = [];
+        foreach ($cancelled as $booking) {
+            if ($booking->email !== GymEmail::Sent && count($ids) < self::MAX_LISTED) {
+                $ids[] = $booking->entry->booking->id;
             }
-            if ($ids !== []) {
-                $query[$parameter] = implode(',', $ids);
-            }
+        }
+        if ($ids !== []) {
+            $query[self::NOT_EMAILED] = implode(',', $ids);
         }
 
         return $query;

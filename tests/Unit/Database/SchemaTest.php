@@ -7,6 +7,7 @@ namespace FourStreet\Tests\Unit\Database;
 use FourStreet\Database\Database;
 use FourStreet\Database\DatabaseConfig;
 use FourStreet\Database\Driver;
+use FourStreet\Database\Migration\ColumnMigration;
 use FourStreet\Database\Migration\Migration;
 use FourStreet\Database\Migration\Migrator;
 use FourStreet\Database\Row;
@@ -38,6 +39,7 @@ final class SchemaTest extends TestCase
         '0004_create_rate_limits',
         '0005_create_bookings',
         '0006_create_schedule',
+        '0007_add_bookings_gym_email',
     ];
 
     private Database $database;
@@ -57,16 +59,56 @@ final class SchemaTest extends TestCase
 
     public function testEveryStatementCanRunTwice(): void
     {
-        // Una migrazione interrotta a metà (su MySQL lo schema non è transazionale) si rilancia così com'è.
+        // Una migrazione interrotta a metà (su MySQL lo schema non è transazionale) si rilancia così com'è. Una colonna
+        // aggiunta no: quella la salta il Migrator, se c'è già (il test qui sotto).
         foreach (self::MIGRATIONS as $version) {
-            $migration = require TestDatabase::migrations() . '/' . $version . '.php';
-            self::assertInstanceOf(Migration::class, $migration);
+            $migration = self::migration($version);
+            if ($migration instanceof ColumnMigration) {
+                continue;
+            }
             foreach ($migration->statements($this->database->driver()) as $statement) {
                 $this->database->execute($statement);
             }
         }
 
         self::assertSame(0, $this->database->fetchOne('SELECT COUNT(*) AS total FROM users')?->int('total'));
+    }
+
+    public function testAColumnMigrationInterruptedBeforeTheRegistryIsOnlyRegisteredAgain(): void
+    {
+        // Su MySQL l'ALTER TABLE è fatto, ma il processo si è fermato prima di scrivere il registro: rilanciata, la
+        // migrazione trova la colonna e si registra soltanto, senza errori. La colonna resta con i suoi vincoli.
+        $this->database->execute('DELETE FROM ' . Migrator::TABLE . " WHERE version = '0007_add_bookings_gym_email'");
+        $migrator = new Migrator($this->database, TestDatabase::migrations(), FrozenClock::at('2026-11-25 08:00:00'));
+        self::assertFalse($migrator->status()['0007_add_bookings_gym_email'] ?? true);
+
+        self::assertSame(['0007_add_bookings_gym_email'], $migrator->migrate());
+        self::assertSame(array_fill_keys(self::MIGRATIONS, true), $migrator->status());
+
+        // Il CHECK della colonna c'è ancora: SQLite cita l'espressione, MySQL e MariaDB il nome del vincolo.
+        $this->expectException(PDOException::class);
+        $this->expectExceptionMessageMatches('/gym_email/');
+        $this->insert('bookings', ['user_id' => null, 'guest_name' => 'Ospite Prova', 'slot_date' => '2026-12-07', 'slot_time' => '18:30', 'starts_at' => '2026-12-07 17:30:00', 'seat' => null, 'active' => null, 'created_at' => '2026-11-25 07:00:00', 'created_by' => 'admin', 'cancelled_at' => '2026-11-25 08:00:00', 'cancelled_by' => 'admin', 'gym_email' => 'pending']);
+    }
+
+    public function testAColumnMigrationIsASingleStatementOnMySql(): void
+    {
+        // Su MySQL un ALTER TABLE è atomico: se la colonna c'è, ci sono anche i suoi vincoli. Due istruzioni no.
+        $columns = 0;
+        foreach (self::MIGRATIONS as $version) {
+            $migration = self::migration($version);
+            if ($migration instanceof ColumnMigration) {
+                ++$columns;
+                $statements = $migration->statements(Driver::MySql);
+                self::assertCount(1, $statements, $version);
+                self::assertMatchesRegularExpression(
+                    '/\AALTER TABLE ' . preg_quote($migration->table(), '/') . '\s+ADD COLUMN ' . preg_quote($migration->column(), '/') . '\s/',
+                    $statements[0],
+                    $version,
+                );
+            }
+        }
+        self::assertNotSame(0, $columns, 'Almeno una: la 0007.');
     }
 
     /**
@@ -102,6 +144,13 @@ final class SchemaTest extends TestCase
         yield 'persona senza account inserita da un cliente' => ['bookings', [...$guest, 'created_by' => 'customer']];
         yield 'nome di una lettera' => ['bookings', [...$guest, 'guest_name' => 'O']];
         yield 'nome troppo lungo' => ['bookings', [...$guest, 'guest_name' => str_repeat('o', 101)]];
+
+        // L'email della palestra (0007): solo i suoi quattro stati, e solo per un cliente registrato a cui ha disdetto lei.
+        $byGym = [...$booking, ...$cancelled, 'cancelled_by' => 'admin'];
+        yield 'email della palestra in uno stato sconosciuto' => ['bookings', [...$byGym, 'gym_email' => 'queued']];
+        yield 'email della palestra di una prenotazione attiva' => ['bookings', [...$booking, 'gym_email' => 'pending']];
+        yield 'email della palestra per una disdetta del cliente' => ['bookings', [...$booking, ...$cancelled, 'gym_email' => 'sent']];
+        yield 'email della palestra a chi non ha l\'account' => ['bookings', [...$guest, ...$cancelled, 'cancelled_by' => 'admin', 'gym_email' => 'failed']];
 
         // L'orario e le regole del pannello del titolare (0006).
         yield 'regola senza valore' => ['booking_settings', ['name' => 'days_ahead', 'value' => '', 'updated_by' => null, 'updated_at' => '2026-11-25 07:00:00']];
@@ -148,6 +197,31 @@ final class SchemaTest extends TestCase
         self::assertSame(3, $this->database->fetchOne('SELECT COUNT(*) AS total FROM bookings')?->int('total'));
     }
 
+    public function testTheEmailOfTheGymTakesItsFourStatesAndNullForEverythingElse(): void
+    {
+        $this->insert('users', ['full_name' => 'A', 'email' => 'a@example.test', 'password_hash' => 'h', 'privacy_accepted_at' => '2026-11-25 07:00:00', 'role' => 'customer', 'created_at' => '2026-11-25 07:00:00', 'updated_at' => '2026-11-25 07:00:00']);
+        $user = $this->database->lastInsertId();
+        $byGym = ['user_id' => $user, 'slot_time' => '18:30', 'starts_at' => '2026-12-07 17:30:00', 'seat' => null, 'active' => null, 'created_at' => '2026-11-25 07:00:00', 'created_by' => 'customer', 'cancelled_at' => '2026-11-25 08:00:00', 'cancelled_by' => 'admin'];
+
+        // Un giorno ciascuna: un cliente ha al più una prenotazione attiva al giorno, ma le disdette non contano.
+        foreach (['pending', 'sending', 'sent', 'failed', null] as $index => $state) {
+            $this->insert('bookings', [...$byGym, 'slot_date' => '2026-12-1' . $index, 'gym_email' => $state]);
+        }
+        // Senza stato anche chi non ha l'account, le disdette del cliente e le prenotazioni attive.
+        $this->insert('bookings', [...$byGym, 'user_id' => null, 'guest_name' => 'Ospite Prova', 'created_by' => 'admin', 'slot_date' => '2026-12-20', 'gym_email' => null]);
+        $this->insert('bookings', [...$byGym, 'cancelled_by' => 'customer', 'slot_date' => '2026-12-21', 'gym_email' => null]);
+        $this->insert('bookings', [...$byGym, 'seat' => 1, 'active' => 1, 'cancelled_at' => null, 'cancelled_by' => null, 'slot_date' => '2026-12-22', 'gym_email' => null]);
+
+        self::assertSame(
+            ['failed' => 1, 'pending' => 1, 'sending' => 1, 'sent' => 1],
+            array_column(array_map(
+                static fn(Row $row): array => [$row->string('gym_email'), $row->int('total')],
+                $this->database->fetchAll('SELECT gym_email, COUNT(*) AS total FROM bookings WHERE gym_email IS NOT NULL GROUP BY gym_email ORDER BY gym_email'),
+            ), 1, 0),
+        );
+        self::assertSame(4, $this->database->fetchOne('SELECT COUNT(*) AS total FROM bookings WHERE gym_email IS NULL')?->int('total'));
+    }
+
     public function testTheScheduleTablesAcceptWhatThePanelWrites(): void
     {
         $this->insert('users', ['full_name' => 'A', 'email' => 'a@example.test', 'password_hash' => 'h', 'privacy_accepted_at' => '2026-11-25 07:00:00', 'role' => 'admin', 'created_at' => '2026-11-25 07:00:00', 'updated_at' => '2026-11-25 07:00:00']);
@@ -179,6 +253,14 @@ final class SchemaTest extends TestCase
     public function testTheDriverIsTheExpectedOne(): void
     {
         self::assertSame(TestDatabase::isExternal() ? Driver::MySql : Driver::Sqlite, $this->database->driver());
+    }
+
+    private static function migration(string $version): Migration
+    {
+        $migration = require TestDatabase::migrations() . '/' . $version . '.php';
+        self::assertInstanceOf(Migration::class, $migration);
+
+        return $migration;
     }
 
     /**

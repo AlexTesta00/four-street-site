@@ -16,6 +16,8 @@ use RuntimeException;
  * La tabella schema_migrations tiene il registro: rilanciare migrate non rifà nulla.
  * Su SQLite ogni migrazione è una transazione (entra tutta o niente); su MySQL lo schema non è
  * transazionale, e per questo ogni istruzione di una migrazione è scritta per poter girare di nuovo.
+ * Una colonna aggiunta a una tabella che c'è già non si può riaggiungere: quella migrazione (ColumnMigration)
+ * si salta se la colonna c'è già, e si registra soltanto.
  */
 final readonly class Migrator
 {
@@ -80,7 +82,9 @@ final readonly class Migrator
     private function apply(string $version, Migration $migration): void
     {
         $apply = function () use ($version, $migration): void {
-            foreach ($migration->statements($this->database->driver()) as $sql) {
+            // La colonna c'è già: la migrazione era fatta, interrotta (su MySQL) prima di arrivare nel registro.
+            $done = $migration instanceof ColumnMigration && $this->hasColumn($migration->table(), $migration->column());
+            foreach ($done ? [] : $migration->statements($this->database->driver()) as $sql) {
                 $this->database->execute($sql);
             }
             $this->database->execute(
@@ -166,5 +170,14 @@ final readonly class Migrator
             Driver::Sqlite => "SELECT name FROM sqlite_master WHERE type = 'table' AND name = :name",
             Driver::MySql => 'SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :name',
         }, ['name' => self::TABLE]) !== null;
+    }
+
+    /** La tabella ha già quella colonna. */
+    private function hasColumn(string $table, string $column): bool
+    {
+        return $this->database->fetchOne(match ($this->database->driver()) {
+            Driver::Sqlite => 'SELECT name FROM pragma_table_info(:table_name) WHERE name = :column_name',
+            Driver::MySql => 'SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name AND COLUMN_NAME = :column_name',
+        }, ['table_name' => $table, 'column_name' => $column]) !== null;
     }
 }

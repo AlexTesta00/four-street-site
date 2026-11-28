@@ -6,15 +6,15 @@ namespace FourStreet\Booking\Schedule;
 
 use DateTimeImmutable;
 use FourStreet\Account\User;
-use FourStreet\Account\UserRepository;
 use FourStreet\Booking\BookingCalendar;
-use FourStreet\Booking\BookingNotifier;
+use FourStreet\Booking\BookingEmails;
 use FourStreet\Booking\BookingRepository;
 use FourStreet\Booking\CancelledBy;
-use FourStreet\Booking\EmailDelivery;
+use FourStreet\Booking\GymEmail;
 use FourStreet\Booking\LocalDate;
 use FourStreet\Booking\RosterEntry;
 use FourStreet\Booking\SlotTime;
+use FourStreet\Booking\Staff\GymEmailSender;
 use FourStreet\Booking\Staff\StaffThrottle;
 use FourStreet\Booking\Weekday;
 use FourStreet\Clock\Clock;
@@ -32,8 +32,10 @@ use PDOException;
  * - un giorno con lo stesso orario della settimana tipo torna a seguirla: nessuna eccezione che non serve;
  * - una fascia che sparisce non lascia orfane le sue prenotazioni attive non ancora iniziate: apply() le disdice
  *   (CancelledBy::Admin) nella stessa transazione della modifica, ma solo se sono proprio quelle che il titolare ha
- *   visto e confermato (l'impronta di ChangePlan); poi ai clienti registrati parte l'email della palestra, con il perché.
- *   Un'email che non parte non annulla nulla: l'esito lo dice, e chi non ha l'account lo avvisa il titolare.
+ *   visto e confermato (l'impronta di ChangePlan); la disdetta scrive l'email della palestra in attesa (GymEmail), e
+ *   dopo la transazione ai clienti registrati parte l'email, con il perché (Staff\GymEmailSender, con i suoi tetti).
+ *   Un'email che non parte non annulla nulla: lo stato resta nel database, l'esito lo dice, la pagina Disdette la
+ *   rimanda; chi non ha l'account lo avvisa il titolare.
  *
  * Due modifiche del titolare insieme (due tocchi in fretta, due telefoni) passano una alla volta: apply() blocca
  * l'orario e solo dopo lo rilegge.
@@ -50,9 +52,6 @@ final readonly class ScheduleEditor
     /** Quante volte si rifà una modifica che ha perso una gara con un'altra transazione. */
     private const int ATTEMPTS = 3;
 
-    /** Dopo tanti invii falliti di fila, le altre email non si provano: il server di posta non risponde. */
-    private const int FAILURES_BEFORE_GIVING_UP = 2;
-
     /** Stallo fra due transazioni (MySQL). */
     private const string SERIALIZATION_FAILURE = '40001';
 
@@ -61,13 +60,13 @@ final readonly class ScheduleEditor
 
     /**
      * @param BookingCalendar $calendar il calendario sulla stessa fonte dell'orario ($schedule)
+     * @param GymEmailSender $emails le email della palestra, lo stesso per tutta la richiesta (i suoi tetti valgono per tutti gli invii)
      */
     public function __construct(
         private BookingCalendar $calendar,
         private ScheduleStore $schedule,
         private BookingRepository $bookings,
-        private UserRepository $users,
-        private BookingNotifier $notifier,
+        private GymEmailSender $emails,
         private RateLimiter $limiter,
         private ItalianDateFormatter $dates,
         private Clock $clock,
@@ -157,7 +156,8 @@ final readonly class ScheduleEditor
         $this->write($plan, $staff, $now);
         $done = [];
         foreach ($plan->affected as $entry) {
-            // Già disdetta nel frattempo (dal cliente): non è più da disdire, né da avvisare.
+            // Già disdetta nel frattempo (dal cliente): non è più da disdire, né da avvisare. La disdetta scrive l'email
+            // della palestra in attesa, qui dentro: se poi l'invio non arriva, la pagina Disdette lo sa.
             if ($this->bookings->cancel($entry->booking->id, $now, CancelledBy::Admin)) {
                 $done[] = $entry;
             }
@@ -167,9 +167,10 @@ final readonly class ScheduleEditor
     }
 
     /**
-     * L'email della palestra a ogni cliente registrato, con il perché. Dopo due invii falliti di fila il server di posta
-     * non risponde: gli altri non si provano (ognuno lo aspetterebbe fino al suo limite) e risultano non partiti,
-     * così l'avviso dice al titolare chi avvisare.
+     * L'email della palestra a ogni cliente registrato, con il perché ("Quel giorno la palestra resta chiusa.", mai la
+     * nota del titolare). La manda GymEmailSender, che si ferma al tetto di tempo della richiesta o dopo due invii
+     * falliti di fila: le email rimaste restano in attesa, e l'avviso porta il titolare alla pagina Disdette.
+     * Chi non ha l'account non ha email: lo avvisa il titolare.
      *
      * @param list<RosterEntry> $cancelled
      *
@@ -177,17 +178,22 @@ final readonly class ScheduleEditor
      */
     private function notifyAll(array $cancelled, ChangePlan $plan): array
     {
-        $results = [];
-        $failures = 0;
+        $emails = [];
         foreach ($cancelled as $entry) {
-            $email = $failures >= self::FAILURES_BEFORE_GIVING_UP && !$entry->booking->isGuest()
-                ? EmailDelivery::Failed
-                : $this->notify($entry, $plan);
-            $failures = $email === EmailDelivery::Failed ? $failures + 1 : ($email === EmailDelivery::Sent ? 0 : $failures);
-            $results[] = new CancelledBooking($entry, $email);
+            if (!$entry->booking->isGuest()) {
+                $emails[] = [$entry->booking, $plan->closes($entry) ? BookingEmails::DAY_CLOSED : BookingEmails::slotRemoved($entry->booking->time)];
+            }
         }
+        $round = $this->emails->send($emails);
 
-        return $results;
+        // Un'email che il giro non ha provato resta in attesa, come l'ha scritta la disdetta.
+        return array_map(
+            static fn(RosterEntry $entry): CancelledBooking => new CancelledBooking(
+                $entry,
+                $entry->booking->isGuest() ? null : ($round->of($entry->booking->id) ?? GymEmail::Pending),
+            ),
+            $cancelled,
+        );
     }
 
     private function planWeekday(ScheduleChange $change, DateTimeImmutable $now): ChangePlan
@@ -479,20 +485,6 @@ final readonly class ScheduleEditor
                 $this->schedule->saveDay($day->date, $day->kind === DayKind::Closed, $day->after, $day->note, $staff->id, $now);
             }
         }
-    }
-
-    /** L'email della palestra al cliente registrato, con il perché; chi non ha l'account lo avvisa il titolare. */
-    private function notify(RosterEntry $entry, ChangePlan $plan): EmailDelivery
-    {
-        $booking = $entry->booking;
-        $customer = $booking->userId === null ? null : $this->users->findById($booking->userId);
-        if ($customer === null) {
-            return EmailDelivery::NoAddress;
-        }
-
-        return $this->notifier->cancelledByGym($customer, $booking, $plan->closes($entry)
-            ? 'Quel giorno la palestra resta chiusa.'
-            : sprintf('Quel giorno la fascia delle %s non c\'è più.', $booking->time));
     }
 
     /**

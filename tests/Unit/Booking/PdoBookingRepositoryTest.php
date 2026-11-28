@@ -20,6 +20,7 @@ use FourStreet\Booking\CancelledBy;
 use FourStreet\Booking\CreatedBy;
 use FourStreet\Booking\ExampleSlotCatalog;
 use FourStreet\Booking\FirstFreeSeat;
+use FourStreet\Booking\GymEmail;
 use FourStreet\Booking\LocalDate;
 use FourStreet\Booking\Occupancy;
 use FourStreet\Booking\PdoBookingRepository;
@@ -40,6 +41,7 @@ use FourStreet\Database\UtcDateTime;
 use FourStreet\Tests\Support\MovableClock;
 use FourStreet\Tests\Support\SiteFixture;
 use FourStreet\Tests\Support\TestDatabase;
+use LogicException;
 use PDOException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -58,6 +60,7 @@ use RuntimeException;
 #[CoversClass(BookingResult::class)]
 #[CoversClass(Occupancy::class)]
 #[CoversClass(FirstFreeSeat::class)]
+#[CoversClass(GymEmail::class)]
 #[UsesClass(BookingCalendar::class)]
 #[UsesClass(BookingRules::class)]
 #[UsesClass(WeeklySchedule::class)]
@@ -434,6 +437,94 @@ final class PdoBookingRepositoryTest extends TestCase
         self::assertFalse($cancelledEntry->booking->isActive());
         self::assertSame('anna@example.test', $cancelledEntry->email?->value);
         self::assertSame([], $this->bookings->findEntries([]));
+    }
+
+    public function testTheGymsCancellationOwesARegisteredCustomerAnEmailFromTheSameStatement(): void
+    {
+        $staff = $this->customer('titolare@example.test');
+        $anna = $this->customer('anna@example.test', 'Anna Bianchi');
+        $now = $this->clock->now();
+        $byGym = $this->bookings->place($anna->id, $this->slot('2026-12-07', '18:30'), 5, null, $now, CreatedBy::Customer)->booking();
+        $byCustomer = $this->bookings->place($anna->id, $this->slot('2026-12-08', '18:30'), 5, null, $now, CreatedBy::Customer)->booking();
+        $guest = $this->bookings->placeGuest(self::person('Marco Neri'), $this->slot('2026-12-07', '07:00'), 5, $staff->id, $now)->booking();
+        $active = $this->bookings->place($anna->id, $this->slot('2026-12-09', '18:30'), 5, null, $now, CreatedBy::Customer)->booking();
+
+        self::assertTrue($this->bookings->cancel($byGym->id, $now, CancelledBy::Admin));
+        self::assertTrue($this->bookings->cancel($byCustomer->id, $now, CancelledBy::Customer));
+        self::assertTrue($this->bookings->cancel($guest->id, $now, CancelledBy::Admin));
+
+        // In attesa già con la disdetta, prima di ogni invio; nessuno stato per chi non ha l'account né per il resto.
+        self::assertSame(GymEmail::Pending, $this->bookings->find($byGym->id)?->gymEmail);
+        self::assertNull($this->bookings->find($byCustomer->id)?->gymEmail);
+        self::assertNull($this->bookings->find($guest->id)?->gymEmail);
+        self::assertNull($this->bookings->find($active->id)?->gymEmail);
+        self::assertNull($byGym->gymEmail, 'Attiva, non aveva nessuna email.');
+    }
+
+    public function testAnEmailOfTheGymIsTakenByOneSendOnlyAndNeverAgainOnceSent(): void
+    {
+        $staff = $this->customer('titolare@example.test');
+        $now = $this->clock->now();
+        $booking = $this->bookings->place($this->customer('anna@example.test')->id, $this->slot('2026-12-07', '18:30'), 5, null, $now, CreatedBy::Customer)->booking();
+        $guest = $this->bookings->placeGuest(self::person('Marco Neri'), $this->slot('2026-12-07', '07:00'), 5, $staff->id, $now)->booking();
+        $active = $this->bookings->place($this->customer('luca@example.test')->id, $this->slot('2026-12-07', '18:30'), 5, null, $now, CreatedBy::Customer)->booking();
+        $this->bookings->cancel($booking->id, $now, CancelledBy::Admin);
+        $this->bookings->cancel($guest->id, $now, CancelledBy::Admin);
+
+        // Due invii insieme: il database ne fa vincere uno.
+        self::assertTrue($this->bookings->claimGymEmail($booking->id));
+        self::assertFalse($this->bookings->claimGymEmail($booking->id), 'Già in invio: la manda l\'altro.');
+        self::assertSame(GymEmail::Sending, $this->bookings->find($booking->id)?->gymEmail);
+
+        // Non partita si riprende; partita mai più.
+        $this->bookings->settleGymEmail($booking->id, GymEmail::Failed);
+        self::assertSame(GymEmail::Failed, $this->bookings->find($booking->id)?->gymEmail);
+        self::assertTrue($this->bookings->claimGymEmail($booking->id));
+        $this->bookings->settleGymEmail($booking->id, GymEmail::Sent);
+        self::assertSame(GymEmail::Sent, $this->bookings->find($booking->id)?->gymEmail);
+        self::assertFalse($this->bookings->claimGymEmail($booking->id));
+        $this->bookings->settleGymEmail($booking->id, GymEmail::Failed);
+        self::assertSame(GymEmail::Sent, $this->bookings->find($booking->id)?->gymEmail, 'Si chiude solo un invio preso.');
+
+        // Nessuna email da prendere per chi non ha l'account, né per una prenotazione attiva.
+        self::assertFalse($this->bookings->claimGymEmail($guest->id));
+        self::assertFalse($this->bookings->claimGymEmail($active->id));
+        self::assertFalse($this->bookings->claimGymEmail(PHP_INT_MAX));
+
+        $this->expectException(LogicException::class);
+        $this->bookings->settleGymEmail($booking->id, GymEmail::Pending);
+    }
+
+    public function testTheUpcomingCancellationsOfTheGymWithTheirPeopleInOneRead(): void
+    {
+        $staff = $this->customer('titolare@example.test');
+        $anna = $this->customer('anna@example.test', 'Anna Bianchi');
+        $luca = $this->customer('luca@example.test', 'Luca Verdi');
+        $now = $this->clock->now();
+        $later = $this->bookings->place($anna->id, $this->slot('2026-12-09', '07:00'), 5, null, $now, CreatedBy::Customer)->booking();
+        $evening = $this->bookings->place($luca->id, $this->slot('2026-12-07', '18:30'), 5, null, $now, CreatedBy::Customer)->booking();
+        $guest = $this->bookings->placeGuest(self::person('Marco Neri'), $this->slot('2026-12-07', '07:00'), 5, $staff->id, $now)->booking();
+        $byCustomer = $this->bookings->place($luca->id, $this->slot('2026-12-08', '07:00'), 5, null, $now, CreatedBy::Customer)->booking();
+        $this->bookings->place($anna->id, $this->slot('2026-12-10', '07:00'), 5, null, $now, CreatedBy::Customer);
+        foreach ([$later, $evening, $guest] as $booking) {
+            $this->bookings->cancel($booking->id, $now, CancelledBy::Admin);
+        }
+        $this->bookings->cancel($byCustomer->id, $now, CancelledBy::Customer);
+        $this->bookings->claimGymEmail($evening->id);
+        $this->bookings->settleGymEmail($evening->id, GymEmail::Sent);
+
+        // Solo quelle disdette dalla palestra, per giorno e fascia, con la persona e com'è andata l'email.
+        self::assertSame(
+            [[$guest->id, 'Marco Neri', null, null], [$evening->id, 'Luca Verdi', 'luca@example.test', GymEmail::Sent], [$later->id, 'Anna Bianchi', 'anna@example.test', GymEmail::Pending]],
+            array_map(
+                static fn(RosterEntry $entry): array => [$entry->booking->id, $entry->name, $entry->email?->value, $entry->booking->gymEmail],
+                $this->bookings->upcomingGymCancellations(self::day('2026-11-25'), $now),
+            ),
+        );
+
+        // Cominciata la fascia, la disdetta non è più da avvisare: non c'è.
+        $this->clock->moveTo('2026-12-07 18:30:00');
+        self::assertSame([$later->id], self::ids($this->bookings->upcomingGymCancellations(self::day('2026-12-07'), $this->clock->now())));
     }
 
     private function slot(string $date, string $time): ScheduledSlot

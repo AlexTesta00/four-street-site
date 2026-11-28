@@ -98,6 +98,24 @@ final class MigratorTest extends TestCase
         self::assertSame(['0001_broken' => false], $this->migrator()->status());
     }
 
+    public function testAMigrationThatAddsAColumnAlreadyThereIsOnlyRegistered(): void
+    {
+        $this->migration('0001_create_things.php', "'CREATE TABLE things (id INTEGER PRIMARY KEY)'");
+        $this->columnMigration('0002_add_things_name.php', 'things', 'name', "'ALTER TABLE things ADD COLUMN name TEXT NULL'");
+        $migrator = $this->migrator();
+        self::assertSame(['0001_create_things', '0002_add_things_name'], $migrator->migrate());
+        self::assertNotNull($this->database->fetchOne("SELECT name FROM pragma_table_info('things') WHERE name = 'name'"));
+
+        // Interrotta (su MySQL) dopo l'ALTER TABLE e prima del registro: la colonna c'è, la riga del registro no.
+        // Rifare l'ALTER TABLE sarebbe un errore ("duplicate column"): la migrazione si registra soltanto.
+        $this->database->execute("DELETE FROM schema_migrations WHERE version = '0002_add_things_name'");
+        self::assertSame(['0001_create_things' => true, '0002_add_things_name' => false], $migrator->status());
+
+        self::assertSame(['0002_add_things_name'], $migrator->migrate());
+        self::assertSame(['0001_create_things' => true, '0002_add_things_name' => true], $migrator->status());
+        self::assertSame([], $migrator->migrate());
+    }
+
     public function testAMisnamedFileIsRefused(): void
     {
         $this->migration('1_create_things.php', "'CREATE TABLE things (id INTEGER PRIMARY KEY)'");
@@ -147,6 +165,40 @@ final class MigratorTest extends TestCase
             use FourStreet\\Database\\Migration\\Migration;
 
             return new class implements Migration {
+                public function statements(Driver \$driver): array
+                {
+                    return [{$statements}];
+                }
+            };
+            PHP);
+    }
+
+    /**
+     * Una migrazione che aggiunge una colonna a una tabella (ColumnMigration), con le stesse istruzioni su ogni database.
+     *
+     * @param string $statements istruzioni SQL come elementi di un array PHP, già tra apici
+     */
+    private function columnMigration(string $file, string $table, string $column, string $statements): void
+    {
+        $this->migrations->file($file, <<<PHP
+            <?php
+
+            declare(strict_types=1);
+
+            use FourStreet\\Database\\Driver;
+            use FourStreet\\Database\\Migration\\ColumnMigration;
+
+            return new class implements ColumnMigration {
+                public function table(): string
+                {
+                    return '{$table}';
+                }
+
+                public function column(): string
+                {
+                    return '{$column}';
+                }
+
                 public function statements(Driver \$driver): array
                 {
                     return [{$statements}];

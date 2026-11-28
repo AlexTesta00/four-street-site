@@ -14,23 +14,32 @@ use FourStreet\Account\User;
 use FourStreet\Admin\AdminUrls;
 use FourStreet\Admin\Form\StaffBookingForm;
 use FourStreet\Admin\Http\AdminNotice;
+use FourStreet\Admin\Http\ResendNotice;
 use FourStreet\Booking\Booking;
 use FourStreet\Booking\CreatedBy;
+use FourStreet\Booking\GymEmail;
 use FourStreet\Booking\LocalDate;
 use FourStreet\Booking\RosterEntry;
 use FourStreet\Booking\SlotTime;
+use FourStreet\Booking\Staff\GymEmailRound;
+use FourStreet\Booking\Staff\GymEmailStop;
+use FourStreet\Booking\Staff\ResendOutcome;
 use FourStreet\Http\Request;
 use FourStreet\Text\ItalianDateFormatter;
+use FourStreet\View\Alert;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 /**
- * I valori del pannello del titolare: gli indirizzi (mai un nome), gli avvisi, il modulo con i due campi alternativi
- * e la pagina dopo l'accesso.
+ * I valori del pannello del titolare: gli indirizzi (mai un nome), gli avvisi (quello di una disdetta con l'email com'è
+ * adesso nel database, quello dopo "Invia le email rimaste"), il modulo con i due campi alternativi e la pagina dopo
+ * l'accesso.
  */
 #[CoversClass(AdminUrls::class)]
 #[CoversClass(AdminNotice::class)]
+#[CoversClass(ResendNotice::class)]
+#[CoversClass(ResendOutcome::class)]
 #[CoversClass(StaffBookingForm::class)]
 #[CoversClass(SignInDestination::class)]
 final class AdminValuesTest extends TestCase
@@ -72,6 +81,56 @@ final class AdminValuesTest extends TestCase
             self::assertSame($notice, AdminNotice::fromRequest(Request::create('GET', '/gestione/?avviso=' . $notice->value)));
         }
         self::assertNull(AdminNotice::fromRequest(Request::create('GET', '/gestione/?avviso=uscito')), 'Gli avvisi dell\'area clienti non sono del pannello.');
+    }
+
+    public function testAfterACancellationTheNoticeSaysHowTheGymEmailIsNow(): void
+    {
+        $dates = new ItalianDateFormatter();
+        $with = static fn(?GymEmail $email): RosterEntry => new RosterEntry(self::booking(userId: 7, gymEmail: $email), 'Anna Bianchi', EmailAddress::tryFrom('anna@example.test'));
+        $lead = 'Anna Bianchi, lunedì 7 dicembre alle 18:30. Il posto è tornato libero. ';
+
+        // Il database vince sull'indirizzo: rimandata da Disdette è partita, anche se al redirect non lo era.
+        self::assertSame($lead . 'Gli abbiamo mandato un\'email per avvisarlo.', AdminNotice::CancelledWithoutEmail->alert($with(GymEmail::Sent), $dates)->message);
+        self::assertSame($lead . 'L\'email di avviso non è partita: rimandala da Disdette, oppure avvisalo tu.', AdminNotice::Cancelled->alert($with(GymEmail::Failed), $dates)->message);
+        foreach ([GymEmail::Pending, GymEmail::Sending] as $email) {
+            self::assertSame($lead . 'L\'email di avviso non è ancora partita: controlla in Disdette.', AdminNotice::Cancelled->alert($with($email), $dates)->message);
+        }
+
+        // Senza esito nel database (una disdetta di prima che lo registrasse, o la prenotazione che non si trova) vale l'indirizzo.
+        self::assertSame($lead . 'Gli abbiamo mandato un\'email per avvisarlo.', AdminNotice::Cancelled->alert($with(null), $dates)->message);
+        self::assertSame($lead . 'L\'email di avviso non è partita: rimandala da Disdette, oppure avvisalo tu.', AdminNotice::CancelledWithoutEmail->alert($with(null), $dates)->message);
+        self::assertSame('Il posto è tornato libero. L\'email di avviso non è partita: rimandala da Disdette, oppure avvisalo tu.', AdminNotice::CancelledWithoutEmail->alert(null, $dates)->message);
+    }
+
+    public function testTheNoticeAfterSendingTheRemainingEmailsCarriesOnlyHowManyLeft(): void
+    {
+        $round = static fn(?GymEmailStop $stopped): GymEmailRound => new GymEmailRound([10 => GymEmail::Sent, 11 => GymEmail::Failed, 12 => GymEmail::Sending], $stopped);
+
+        // Com'è finito il giro sceglie l'avviso; nell'indirizzo, oltre all'avviso, solo quante email sono partite.
+        self::assertSame(ResendNotice::Sent, ResendNotice::of(ResendOutcome::sent($round(null))));
+        self::assertSame(ResendNotice::TimeUp, ResendNotice::of(ResendOutcome::sent($round(GymEmailStop::TimeUp))));
+        self::assertSame(ResendNotice::MailDown, ResendNotice::of(ResendOutcome::sent($round(GymEmailStop::MailDown))));
+        self::assertSame(ResendNotice::NothingToSend, ResendNotice::of(ResendOutcome::nothingToSend()));
+        self::assertSame('/gestione/disdette/?avviso=email-tempo-finito&partite=1', AdminUrls::with(AdminUrls::CANCELLATIONS, ResendNotice::of(ResendOutcome::sent($round(GymEmailStop::TimeUp)))->query(1)));
+        self::assertSame(['avviso' => 'nessuna-email-da-inviare'], ResendNotice::NothingToSend->query(0));
+
+        // Dall'indirizzo: l'avviso fra i testi fissi, il conto solo se scritto bene.
+        $request = static fn(string $query): Request => Request::create('GET', '/gestione/disdette/?' . $query);
+        self::assertSame(ResendNotice::MailDown, ResendNotice::fromRequest($request('avviso=email-server-fermo&partite=2')));
+        self::assertNull(ResendNotice::fromRequest($request('avviso=prenotazione-disdetta')));
+        self::assertSame(2, ResendNotice::sentFrom($request('partite=2')));
+        foreach (['partite=-1', 'partite=02', 'partite=due', 'partite=9999999', ''] as $query) {
+            self::assertSame(0, ResendNotice::sentFrom($request($query)), $query);
+        }
+
+        // Partite e rimaste: un successo solo quando qualcosa è partito e non ne resta nessuna.
+        self::assertSame(['success', 'Email inviate', 'Sono partite 3 email. Non ne resta nessuna da inviare.'], self::alert(ResendNotice::Sent->alert(3, 0)));
+        self::assertSame(['info', 'Nulla da inviare', 'Non è partita nessuna email. Non ne resta nessuna da inviare.'], self::alert(ResendNotice::Sent->alert(0, 0)));
+        self::assertSame(['info', 'Email inviate in parte', 'Sono partite 3 email. Ne restano 2: si mandano poche email per volta, perché la pagina non resti ad aspettare. Premi di nuovo «Invia le email rimaste».'], self::alert(ResendNotice::TimeUp->alert(3, 2)));
+        self::assertSame(['error', 'Email non partite', 'Il server di posta non risponde. Non è partita nessuna email. Ne resta una: riprova più tardi, oppure avvisa tu quei clienti.'], self::alert(ResendNotice::MailDown->alert(0, 1)));
+
+        $this->expectException(LogicException::class);
+        ResendNotice::of(ResendOutcome::throttled(900));
     }
 
     public function testTheFormWantsExactlyOneOfEmailAndName(): void
@@ -116,7 +175,7 @@ final class AdminValuesTest extends TestCase
         self::assertSame('/account/', (new SignInDestination())->for(self::user(Role::Admin), ReturnPath::default()), 'Senza pannello, l\'account.');
     }
 
-    private static function booking(?int $userId = null, ?string $guestName = null): Booking
+    private static function booking(?int $userId = null, ?string $guestName = null, ?GymEmail $gymEmail = null): Booking
     {
         $utc = new DateTimeZone('UTC');
 
@@ -130,7 +189,18 @@ final class AdminValuesTest extends TestCase
             seat: 2,
             createdAt: new DateTimeImmutable('2026-11-25 07:00:00', $utc),
             createdBy: $userId === null ? CreatedBy::Admin : CreatedBy::Customer,
+            gymEmail: $gymEmail,
         );
+    }
+
+    /**
+     * Il tono, il titolo e il testo di un avviso.
+     *
+     * @return array{string, string|null, string}
+     */
+    private static function alert(Alert $alert): array
+    {
+        return [$alert->tone, $alert->title, $alert->message];
     }
 
     private static function user(Role $role): User

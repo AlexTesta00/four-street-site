@@ -23,7 +23,7 @@ use FourStreet\View\Template;
  * @var bool|null $compact facoltativo: su mobile niente striscia del logo, così fasce e bottone di conferma
  *                         stanno nel primo schermo (le pagine delle prenotazioni); da lg il logo resta
  * @var Html|null $nav facoltativo: la navigazione di una sezione, sopra l'occhiello (il pannello del titolare,
- *                     partials/admin/nav)
+ *                     partials/admin/nav); da lg una riga a tutta larghezza, sopra il logo e il contenuto
  */
 
 $pending = $site->content;
@@ -52,12 +52,14 @@ $logoClass = ($compact ?? false) ? 'fs-auth__logo hidden lg:block' : 'fs-auth__l
 
 <main id="contenuto" class="fs-auth">
   <div class="fs-auth__inner">
+<?php if (($nav ?? null) !== null): ?>
+    <div class="fs-auth__nav">
+<?= $nav ?>
+    </div>
+<?php endif; ?>
     <?= $view->partial('partials/logo', ['figureClass' => $logoClass, 'imageClass' => '', 'priority' => true]) ?>
 
     <div class="fs-auth__body">
-<?php if (($nav ?? null) !== null): ?>
-<?= $nav ?>
-<?php endif; ?>
       <div class="fs-auth__head">
         <p class="fs-label fs-anim-rise fs-step-2 text-fg-subtle"><?= $view->e($eyebrow) ?></p>
         <h1 class="fs-auth__title fs-anim-rise fs-step-3 font-display text-display-md text-balance text-fg"><?= $view->e($heading) ?></h1>

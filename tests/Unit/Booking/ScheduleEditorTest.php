@@ -19,7 +19,7 @@ use FourStreet\Booking\BookingNotifier;
 use FourStreet\Booking\BookingRules;
 use FourStreet\Booking\BookingStatus;
 use FourStreet\Booking\CreatedBy;
-use FourStreet\Booking\EmailDelivery;
+use FourStreet\Booking\GymEmail;
 use FourStreet\Booking\LocalDate;
 use FourStreet\Booking\PdoBookingRepository;
 use FourStreet\Booking\Schedule\CancelledBooking;
@@ -37,11 +37,14 @@ use FourStreet\Booking\Schedule\ScheduleEditor;
 use FourStreet\Booking\Schedule\ScheduleStore;
 use FourStreet\Booking\ScheduledSlot;
 use FourStreet\Booking\SlotTime;
+use FourStreet\Booking\Staff\GymEmailRound;
+use FourStreet\Booking\Staff\GymEmailSender;
 use FourStreet\Booking\Weekday;
 use FourStreet\Booking\WeeklySchedule;
 use FourStreet\Config\SiteConfig;
 use FourStreet\Database\Database;
 use FourStreet\Http\Origin;
+use FourStreet\Mail\Mailer;
 use FourStreet\Mail\MailTemplates;
 use FourStreet\Security\Fingerprinter;
 use FourStreet\Security\RateLimit\PdoRateLimitStore;
@@ -50,6 +53,7 @@ use FourStreet\Tests\Support\CollectingReporter;
 use FourStreet\Tests\Support\InMemoryMailer;
 use FourStreet\Tests\Support\MovableClock;
 use FourStreet\Tests\Support\SiteFixture;
+use FourStreet\Tests\Support\SlowMailer;
 use FourStreet\Tests\Support\TestDatabase;
 use FourStreet\Text\ItalianDateFormatter;
 use FourStreet\View\Icons;
@@ -64,14 +68,18 @@ use Throwable;
 /**
  * Le modifiche dell'orario fatte dal titolare, senza HTTP, sul database dei test (SQLite in memoria, MariaDB in CI):
  * le regole (il passato non si tocca, l'inaugurazione, il cambio dell'ora, le sovrapposizioni), la settimana tipo che
- * vale da domani, la conferma con l'impronta delle prenotazioni, le disdette con le email e le gare.
+ * vale da domani, la conferma con l'impronta delle prenotazioni, le disdette con le email (e il loro stato nel
+ * database, con il tetto di tempo degli invii) e le gare.
  * L'orologio parte da mercoledì 25 novembre 2026, 08:00; l'inaugurazione è domenica 6 dicembre alle 15:00.
  */
 #[Group('database')]
 #[CoversClass(ScheduleEditor::class)]
 #[CoversClass(ChangePlan::class)]
 #[CoversClass(ChangeOutcome::class)]
+#[CoversClass(CancelledBooking::class)]
 #[CoversClass(PdoSchedule::class)]
+#[CoversClass(GymEmailSender::class)]
+#[CoversClass(GymEmailRound::class)]
 final class ScheduleEditorTest extends TestCase
 {
     private MovableClock $clock;
@@ -134,7 +142,8 @@ final class ScheduleEditorTest extends TestCase
         $done = $editor->apply($this->staff, $change, $first->plan()->fingerprint());
         self::assertSame(ChangeStatus::Applied, $done->status);
         self::assertSame([$monday->id], array_map(static fn(CancelledBooking $cancelled): int => $cancelled->entry->booking->id, $done->cancelled));
-        self::assertSame(EmailDelivery::Sent, ($done->cancelled[0] ?? self::fail())->email);
+        self::assertSame(GymEmail::Sent, ($done->cancelled[0] ?? self::fail())->email);
+        self::assertSame('sent', $this->gymEmail($monday), 'L\'esito dell\'email resta nel database.');
         self::assertNull($this->active($monday));
         self::assertSame(1, $this->active($tuesday));
         self::assertSame(1, $this->active($own));
@@ -159,7 +168,8 @@ final class ScheduleEditorTest extends TestCase
         $done = $editor->apply($this->staff, $change, $plan->fingerprint());
 
         self::assertSame(ChangeStatus::Applied, $done->status);
-        self::assertSame([EmailDelivery::Sent, EmailDelivery::Sent, EmailDelivery::NoAddress], array_map(static fn(CancelledBooking $cancelled): EmailDelivery => $cancelled->email, $done->cancelled));
+        self::assertSame([GymEmail::Sent, GymEmail::Sent, null], array_map(static fn(CancelledBooking $cancelled): ?GymEmail => $cancelled->email, $done->cancelled));
+        self::assertSame(['sent', 'sent', null], [$this->gymEmail($booked), $this->gymEmail($orphan), $this->gymEmail($guest)], 'Chi non ha l\'account non ha un\'email, né uno stato.');
         self::assertTrue($this->schedule->day(self::day('2026-12-09'))->isClosed());
         self::assertSame('ferie', $this->schedule->day(self::day('2026-12-09'))->note);
         self::assertSame(1, $this->active($other));
@@ -299,14 +309,14 @@ final class ScheduleEditorTest extends TestCase
 
         $done = $editor->apply($this->staff, $copy, $plan->fingerprint());
         self::assertSame(ChangeStatus::Applied, $done->status);
-        self::assertSame([EmailDelivery::NoAddress], array_map(static fn(CancelledBooking $cancelled): EmailDelivery => $cancelled->email, $done->cancelled));
+        self::assertSame([null], array_map(static fn(CancelledBooking $cancelled): ?GymEmail => $cancelled->email, $done->cancelled));
         self::assertTrue($this->schedule->day(self::day('2026-12-15'))->isClosed());
         self::assertSame('corso', $this->schedule->day(self::day('2026-12-15'))->note);
         self::assertSame(['07:00', '09:30', '12:30', '17:30', '18:30', '20:00', '21:00'], $this->times('2026-12-16'));
         self::assertSame(DayKind::Week, $this->schedule->day(self::day('2026-12-14'))->kind);
     }
 
-    public function testACancellationStandsEvenIfTheEmailsDoNotLeaveAndAfterTwoFailuresTheRestAreNotTried(): void
+    public function testACancellationStandsEvenIfTheEmailsDoNotLeaveAndAfterTwoFailuresTheRestStayPending(): void
     {
         $people = [];
         foreach (['a', 'b', 'c'] as $index => $name) {
@@ -319,12 +329,54 @@ final class ScheduleEditorTest extends TestCase
 
         $done = $editor->apply($this->staff, $change, $editor->plan($change)->fingerprint());
 
+        // La terza non si prova nemmeno: resta in attesa, com'è davvero, da mandare dalla pagina Disdette.
         self::assertSame(ChangeStatus::Applied, $done->status);
-        self::assertSame([EmailDelivery::Failed, EmailDelivery::Failed, EmailDelivery::Failed, EmailDelivery::NoAddress], array_map(static fn(CancelledBooking $cancelled): EmailDelivery => $cancelled->email, $done->cancelled));
+        self::assertSame([GymEmail::Failed, GymEmail::Failed, GymEmail::Pending, null], array_map(static fn(CancelledBooking $cancelled): ?GymEmail => $cancelled->email, $done->cancelled));
+        self::assertSame(['failed', 'failed', 'pending', null], array_map($this->gymEmail(...), [...$people, $guest]));
         self::assertCount(2, $this->reporter->reported, 'La terza email non si prova nemmeno.');
         foreach ([...$people, $guest] as $booking) {
             self::assertNull($this->active($booking));
         }
+    }
+
+    public function testTheEmailsOfAChangeStopAtTheTimeLimitAndTheRestStayPending(): void
+    {
+        $people = [];
+        foreach (['07:00', '09:30', '12:30', '17:30', '18:30'] as $index => $time) {
+            $people[] = $this->book($this->user('cliente' . $index . '@example.test'), '2026-12-09', $time);
+        }
+        // Una casella lenta: ogni invio dura 5 secondi. Si comincia a 0, 5 e 10 secondi; a 15 il tempo è finito.
+        $slow = new SlowMailer($this->mailer, $this->clock, 5);
+        $editor = $this->editor(mailer: $slow);
+        $change = ScheduleChange::close(self::day('2026-12-09'), self::day('2026-12-09'), null);
+        $started = $this->clock->now();
+
+        $done = $editor->apply($this->staff, $change, $editor->plan($change)->fingerprint());
+
+        self::assertSame(ChangeStatus::Applied, $done->status);
+        self::assertSame([GymEmail::Sent, GymEmail::Sent, GymEmail::Sent, GymEmail::Pending, GymEmail::Pending], array_map(static fn(CancelledBooking $cancelled): ?GymEmail => $cancelled->email, $done->cancelled));
+        self::assertSame(['sent', 'sent', 'sent', 'pending', 'pending'], array_map($this->gymEmail(...), $people));
+        self::assertCount(3, $this->mailer->sent);
+        self::assertSame(15, $this->clock->now()->getTimestamp() - $started->getTimestamp(), 'Un invio cominciato finisce; dopo, nessuno nuovo.');
+        foreach ($people as $booking) {
+            self::assertNull($this->active($booking), 'Le disdette valgono tutte, anche quelle con l\'email rimasta indietro.');
+        }
+    }
+
+    public function testTheTimeLimitHoldsForTheWholeRequestNotForEachChange(): void
+    {
+        $first = $this->book($this->user('anna@example.test'), '2026-12-09', '07:00');
+        $second = $this->book($this->user('luca@example.test'), '2026-12-09', '09:30');
+        $third = $this->book($this->user('sara@example.test'), '2026-12-10', '07:00');
+        $fourth = $this->book($this->user('bea@example.test'), '2026-12-10', '09:30');
+        // Due modifiche nella stessa richiesta (come la riapertura di una chiusura lunga, fatta a pezzi): un tempo solo.
+        $editor = $this->editor(mailer: new SlowMailer($this->mailer, $this->clock, 5));
+        foreach (['2026-12-09', '2026-12-10'] as $date) {
+            $change = ScheduleChange::close(self::day($date), self::day($date), null);
+            self::assertSame(ChangeStatus::Applied, $editor->apply($this->staff, $change, $editor->plan($change)->fingerprint())->status);
+        }
+
+        self::assertSame(['sent', 'sent', 'sent', 'pending'], array_map($this->gymEmail(...), [$first, $second, $third, $fourth]));
     }
 
     public function testAChangeThatLosesARaceIsDoneAgainFromTheStart(): void
@@ -449,23 +501,36 @@ final class ScheduleEditorTest extends TestCase
         };
     }
 
-    private function editor(?ScheduleStore $store = null): ScheduleEditor
+    /**
+     * Il servizio come lo collega AdminModule, con un GymEmailSender suo: le email di una richiesta.
+     *
+     * @param Mailer|null $mailer la posta; senza, quella in memoria del test
+     */
+    private function editor(?ScheduleStore $store = null, ?Mailer $mailer = null): ScheduleEditor
     {
         $store ??= $this->schedule;
         $calendar = BookingCalendar::from($store, $this->site);
         $view = new View(SiteFixture::templateDirectory(), new AssetUrls(SiteFixture::PUBLIC_DIR, SiteFixture::mtimes()), new Icons());
         $dates = new ItalianDateFormatter();
+        $bookings = new PdoBookingRepository($this->database);
+        $emails = new BookingEmails(new MailTemplates($view), Origin::fromUrl('https://fourstreet.studio'), $this->site, $dates, $calendar);
+        $notifier = new BookingNotifier($emails, $mailer ?? $this->mailer, $this->reporter);
 
         return new ScheduleEditor(
             $calendar,
             $store,
-            new PdoBookingRepository($this->database),
-            new PdoUserRepository($this->database),
-            new BookingNotifier(new BookingEmails(new MailTemplates($view), Origin::fromUrl('https://fourstreet.studio'), $this->site, $dates, $calendar), $this->mailer, $this->reporter),
+            $bookings,
+            new GymEmailSender($bookings, new PdoUserRepository($this->database), $emails, $notifier, $this->clock),
             new RateLimiter(new PdoRateLimitStore($this->database), new Fingerprinter(str_repeat('k', 32)), $this->clock),
             $dates,
             $this->clock,
         );
+    }
+
+    /** Com'è l'email della palestra di quella prenotazione nel database: "pending", "sent"…, oppure null. */
+    private function gymEmail(Booking $booking): ?string
+    {
+        return $this->database->fetchOne('SELECT gym_email FROM bookings WHERE id = :id', ['id' => $booking->id])?->nullableString('gym_email');
     }
 
     private function calendar(): BookingCalendar

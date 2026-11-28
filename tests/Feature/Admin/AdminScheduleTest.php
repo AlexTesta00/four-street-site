@@ -188,7 +188,7 @@ final class AdminScheduleTest extends TestCase
         $done = $this->browser->post(self::PAGE, ['azione' => 'togli', 'giorno-settimana' => '1', 'orario' => '18:30', 'prenotazioni' => $fingerprint]);
 
         self::assertSame(303, $done->status);
-        self::assertSame('/gestione/orari/?giorno-settimana=1&avviso=orario-tolto&disdette=2&senza-account=' . $guest->id . '#giorno-1', $done->header('Location'));
+        self::assertSame('/gestione/orari/?giorno-settimana=1&avviso=orario-tolto&disdette=2&da-avvisare=' . $guest->id . '#giorno-1', $done->header('Location'));
         self::assertNull($this->fixture->calendar()->slot(self::date('2026-12-14'), self::time('18:30')));
         self::assertSame('', $this->fixture->seats('2026-12-14', '18:30'));
         self::assertSame('', $this->fixture->seats('2026-12-21', '18:30'));
@@ -405,25 +405,26 @@ final class AdminScheduleTest extends TestCase
         );
 
         // Numeri manomessi: una prenotazione attiva, una disdetta dal cliente, numeri scritti male, un conto che non è un numero.
-        $page = $this->browser->get(self::PAGE . '?giorno-settimana=1&avviso=orario-tolto&disdette=abc&senza-account=' . $active->id . ',x,0,-3,99999999999999999999&senza-email=' . $byCustomer->id . ',' . $guest->id);
+        $page = $this->browser->get(self::PAGE . '?giorno-settimana=1&avviso=orario-tolto&disdette=abc&da-avvisare=' . $active->id . ',x,0,-3,99999999999999999999,' . $byCustomer->id);
         self::assertSame(200, $page->status);
         $monday = self::card($page->body, 1);
         self::assertStringContainsString('<p class="fs-alert__title">Orario tolto</p>', $monday);
         self::assertStringNotContainsString('Anna Bianchi', $page->body);
         self::assertStringNotContainsString('Luca Verdi', $page->body);
-        self::assertStringNotContainsString('Marco Neri', $page->body, 'Una persona senza account non sta fra le email non partite.');
-        self::assertStringNotContainsString('disdette', $page->body);
+        self::assertStringNotContainsString('disdett', $monday, 'Nessun conto, né un elenco.');
 
-        // Una prenotazione davvero disdetta dalla palestra, al posto giusto, si vede; il conto non è mai più piccolo dell'elenco.
-        $listed = $this->browser->get(self::PAGE . '?giorno-settimana=1&avviso=orario-tolto&disdette=1&senza-account=' . $guest->id . ',' . $guest->id);
+        // Una prenotazione davvero disdetta dalla palestra si vede, una volta sola; il conto non è mai più piccolo dell'elenco.
+        // Chi è senza account lo dice il database, non l'indirizzo.
+        $listed = $this->browser->get(self::PAGE . '?giorno-settimana=1&avviso=orario-tolto&disdette=1&da-avvisare=' . $guest->id . ',' . $guest->id);
         self::assertStringContainsString('<p>Una prenotazione disdetta.</p>', $listed->body);
+        self::assertStringContainsString('<p class="fs-changes__lead">Senza account, da avvisare tu:</p>', $listed->body);
         self::assertSame(1, substr_count($listed->body, '<span class="fs-changes__who">Marco Neri</span>'));
 
         // Senza il giorno l'avviso sta in cima; un avviso sconosciuto non c'è; "nulla da cambiare" non ha mai disdette.
         $top = $this->browser->get(self::PAGE . '?giorno-settimana=9&avviso=orario-aggiunto')->body;
         self::assertLessThan(strpos($top, 'id="giorno-1"'), strpos($top, '<p class="fs-alert__title">Orario aggiunto</p>'));
         self::assertStringNotContainsString('<div class="fs-alert', $this->browser->get(self::PAGE . '?avviso=orario-cancellato')->body);
-        $nothing = $this->browser->get(self::PAGE . '?avviso=nulla-da-cambiare&disdette=4&senza-account=' . $guest->id)->body;
+        $nothing = $this->browser->get(self::PAGE . '?avviso=nulla-da-cambiare&disdette=4&da-avvisare=' . $guest->id)->body;
         self::assertStringContainsString('<div class="fs-alert fs-alert--info" role="status">', $nothing);
         self::assertStringContainsString('<p>L&#039;orario era già così: non è cambiato nulla.</p>', $nothing);
         self::assertStringNotContainsString('Marco Neri', $nothing);

@@ -11,7 +11,8 @@ use LogicException;
  * Una prenotazione, come sta nel database: la persona, la fascia (giorno e orario locali), il posto.
  * La persona è un cliente registrato (userId) oppure, se l'ha inserita la palestra, una persona senza account
  * (guestName, il nome scritto dal titolare): sempre una delle due. Disdetta, libera il posto (seat null)
- * e resta come storico, con quando e chi l'ha disdetta. Gli istanti sono in UTC.
+ * e resta come storico, con quando e chi l'ha disdetta e, se l'ha disdetta la palestra a un cliente registrato,
+ * com'è andata l'email della palestra. Gli istanti sono in UTC.
  */
 final readonly class Booking
 {
@@ -20,6 +21,8 @@ final readonly class Booking
      * @param string|null $guestName il nome della persona senza account; null per un cliente registrato
      * @param DateTimeImmutable $startsAt l'inizio della fascia, scritto alla prenotazione
      * @param int|null $seat il posto, da 1; null se la prenotazione è disdetta
+     * @param GymEmail|null $gymEmail l'email della palestra, quando a disdire è stata lei e il cliente ha l'account;
+     *                                null per tutto il resto, comprese le disdette di prima che il sito ne tenesse traccia
      */
     public function __construct(
         public int $id,
@@ -33,6 +36,7 @@ final readonly class Booking
         public CreatedBy $createdBy,
         public ?DateTimeImmutable $cancelledAt = null,
         public ?CancelledBy $cancelledBy = null,
+        public ?GymEmail $gymEmail = null,
     ) {}
 
     public function isActive(): bool

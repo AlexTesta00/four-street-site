@@ -14,9 +14,10 @@
 //    nell'account, disdetta e la sua email. Con booking.online a false controlla "Prenotazioni presto".
 //    Infine il pannello del titolare: 404 per il cliente, admin:grant dalla console del pacchetto,
 //    una persona senza account e un cliente inseriti dal pannello, le due disdette con le loro email
-//    (solo al cliente), il mese, la settimana tipo, la settimana, le chiusure e le impostazioni, la chiusura
-//    di un giorno con il cliente prenotato (conferma, disdetta, email con il motivo) e la riapertura,
-//    admin:list e admin:revoke, che chiude le sessioni.
+//    (solo al cliente), il mese, la settimana tipo, la settimana, le chiusure, le disdette e le impostazioni,
+//    la chiusura di un giorno con il cliente prenotato (conferma, disdetta, email con il motivo), la pagina
+//    Disdette con l'email arrivata, la stessa email segnata non partita e rimandata da lì una volta sola,
+//    la riapertura, admin:list e admin:revoke, che chiude le sessioni.
 //
 // Alla fine build/ deve essere identica a com'era: è l'artefatto che va in produzione.
 //
@@ -132,6 +133,7 @@ const REQUESTS = [
     '/gestione/orari/',
     '/gestione/orari/settimana/',
     '/gestione/chiusure/',
+    '/gestione/disdette/',
     '/gestione/impostazioni/',
   ].map((path) => ({ path, status: 503, type: 'text/html', body: ['Arriva presto.'] })),
 ];
@@ -146,6 +148,7 @@ const REQUIRED_FILES = [
   '_app/database/migrations/0001_create_users.php',
   '_app/database/migrations/0005_create_bookings.php',
   '_app/database/migrations/0006_create_schedule.php',
+  '_app/database/migrations/0007_add_bookings_gym_email.php',
 ];
 const FORBIDDEN_PATHS = [
   '.env',
@@ -491,7 +494,7 @@ async function findAddLink(browser, start = '/gestione/') {
  * stesso inseriti dal pannello (conferma con l'evento solo al cliente), le due disdette (l'email solo al
  * cliente, quella della palestra), admin:list, e admin:revoke che chiude le sessioni.
  */
-async function checkAdminJourney(browser, localConfig, mailDir) {
+async function checkAdminJourney(browser, localConfig, mailDir, databaseFile) {
   const before = await browser.get('/gestione/');
   await before.text();
   check(before.status === 404, `un cliente non vede il pannello: GET /gestione/ ${before.status}`);
@@ -602,7 +605,7 @@ async function checkAdminJourney(browser, localConfig, mailDir) {
     `la disdetta del cliente manda l'email della palestra (${customerPage} ${customerCancelled.status})`,
   );
 
-  await checkScheduleJourney(browser, mailDir);
+  await checkScheduleJourney(browser, mailDir, databaseFile);
 
   const list = runConsole(localConfig, ['admin:list']);
   check(
@@ -623,17 +626,20 @@ async function checkAdminJourney(browser, localConfig, mailDir) {
 }
 
 /**
- * Le pagine nuove del pannello con il titolare: il mese, la settimana tipo, la settimana e le impostazioni; poi una
- * chiusura di un giorno da domani in poi (oggi qualche fascia potrebbe essere già cominciata, e oggi non si chiude più)
- * con il cliente prenotato: la pagina di conferma con chi c'è, la disdetta con l'email della palestra (con il motivo),
- * la chiusura nell'elenco, e la riapertura. Alla fine il giorno è com'era.
+ * Le pagine nuove del pannello con il titolare: il mese, la settimana tipo, la settimana, le disdette e le impostazioni;
+ * poi una chiusura di un giorno da domani in poi (oggi qualche fascia potrebbe essere già cominciata, e oggi non si
+ * chiude più) con il cliente prenotato: la pagina di conferma con chi c'è, la disdetta con l'email della palestra (con
+ * il motivo), la chiusura nell'elenco, la pagina Disdette con l'email arrivata; poi la stessa email segnata non partita
+ * nel database (come con il server di posta fermo), rimandata da lì una volta sola; infine la riapertura. Alla fine il
+ * giorno è com'era.
  */
-async function checkScheduleJourney(browser, mailDir) {
+async function checkScheduleJourney(browser, mailDir, databaseFile) {
   for (const [path, marker] of [
     ['/gestione/calendario/', 'fs-month'],
     ['/gestione/orari/', 'Settimana tipo.</h1>'],
     ['/gestione/orari/settimana/', 'fs-adminnav'],
     ['/gestione/chiusure/', 'Chiusure.</h1>'],
+    ['/gestione/disdette/', 'Disdette.</h1>'],
     ['/gestione/impostazioni/', 'Impostazioni.</h1>'],
   ]) {
     const page = await browser.get(path);
@@ -720,6 +726,8 @@ async function checkScheduleJourney(browser, mailDir) {
     'il giorno chiuso non ha fasce da prenotare',
   );
 
+  await checkCancellationsPage(browser, mailDir, databaseFile, fingerprint);
+
   const reopened = await browser.post('/gestione/chiusure/', {
     csrf: browser.cookies.get('csrf') ?? '',
     azione: 'riapri',
@@ -731,6 +739,74 @@ async function checkScheduleJourney(browser, mailDir) {
     reopened.status === 303 &&
       reopened.headers.get('location')?.startsWith('/gestione/chiusure/?avviso=chiusura-tolta'),
     `la riapertura torna alla settimana tipo (${reopened.status})`,
+  );
+}
+
+/**
+ * La pagina Disdette dopo la chiusura del giorno: la disdetta del cliente con l'email arrivata, niente da mandare.
+ * Poi la stessa email segnata non partita nel database, come se il server di posta non avesse risposto: la pagina la
+ * mostra, "Invia le email rimaste" la manda (con il motivo, il giorno è ancora chiuso) e un secondo invio del modulo
+ * non la rimanda.
+ */
+async function checkCancellationsPage(browser, mailDir, databaseFile, bookingIds) {
+  const page = await (await browser.get('/gestione/disdette/')).text();
+  check(
+    page.includes('Prova Smoke') &&
+      page.includes('Email inviata') &&
+      !page.includes('Invia le email rimaste'),
+    "la pagina Disdette ha la disdetta del cliente, con l'email arrivata",
+  );
+
+  const marked = markGymEmailFailed(databaseFile, bookingIds.split(',')[0]);
+  const failedPage = await (await browser.get('/gestione/disdette/')).text();
+  check(
+    marked.status === 0 &&
+      marked.stdout.trim() === '1' &&
+      failedPage.includes('Email non partita') &&
+      failedPage.includes('Invia le email rimaste'),
+    `un'email non partita si vede nella pagina Disdette, con il bottone (${marked.stdout.trim()})`,
+  );
+
+  const emailsBefore = emailFiles(mailDir).length;
+  const resent = await browser.post('/gestione/disdette/', {
+    csrf: browser.cookies.get('csrf') ?? '',
+  });
+  await resent.text();
+  const afterResend = emailFiles(mailDir);
+  const byGym =
+    afterResend.length === emailsBefore + 1 ? readEmail(mailDir, afterResend.at(-1)) : '';
+  check(
+    resent.status === 303 &&
+      resent.headers.get('location') === '/gestione/disdette/?avviso=email-inviate&partite=1' &&
+      byGym.includes('Subject: Prenotazione disdetta dalla palestra') &&
+      byGym.includes('Quel giorno la palestra resta chiusa.'),
+    `"Invia le email rimaste" la manda, con il motivo (${resent.status} ${resent.headers.get('location')})`,
+  );
+
+  const again = await browser.post('/gestione/disdette/', {
+    csrf: browser.cookies.get('csrf') ?? '',
+  });
+  await again.text();
+  check(
+    again.status === 303 &&
+      again.headers.get('location') === '/gestione/disdette/?avviso=nessuna-email-da-inviare' &&
+      emailFiles(mailDir).length === afterResend.length,
+    `un secondo invio non la rimanda (${again.status} ${again.headers.get('location')})`,
+  );
+}
+
+/** Segna non partita l'email della palestra di una prenotazione, nel database SQLite della prova. */
+function markGymEmailFailed(databaseFile, bookingId) {
+  return spawnSync(
+    php,
+    [
+      '-r',
+      '$s = (new PDO("sqlite:" . $argv[1]))->prepare("UPDATE bookings SET gym_email = \'failed\' WHERE id = ?");' +
+        ' $s->execute([(int) $argv[2]]); echo $s->rowCount();',
+      databaseFile,
+      bookingId,
+    ],
+    { encoding: 'utf8' },
   );
 }
 
@@ -757,6 +833,7 @@ function posix(path) {
 async function checkAccountJourney(temporary) {
   const mailDir = join(temporary, 'mail');
   const localConfig = join(temporary, 'local.php');
+  const databaseFile = join(temporary, '4street.sqlite');
   writeFileSync(
     localConfig,
     [
@@ -766,7 +843,7 @@ async function checkAccountJourney(temporary) {
       'return [',
       `    'base_url' => ${phpString(base)},`,
       `    'secret' => ${phpString(randomBytes(32).toString('hex'))},`,
-      `    'database' => ['dsn' => ${phpString(`sqlite:${posix(join(temporary, '4street.sqlite'))}`)}],`,
+      `    'database' => ['dsn' => ${phpString(`sqlite:${posix(databaseFile)}`)}],`,
       `    'mail' => ['transport' => 'file', 'directory' => ${phpString(posix(mailDir))}, 'from' => 'prove@fourstreet.studio'],`,
       '];',
       '',
@@ -775,7 +852,7 @@ async function checkAccountJourney(temporary) {
 
   const migrate = runConsole(localConfig, ['migrate']);
   check(
-    migrate.status === 0 && migrate.stdout.includes('Database aggiornato: 6 migrazioni applicate.'),
+    migrate.status === 0 && migrate.stdout.includes('Database aggiornato: 7 migrazioni applicate.'),
     `bin/console migrate applica le migrazioni (uscita ${migrate.status})`,
   );
   if (migrate.status !== 0) console.error(migrate.stdout, migrate.stderr);
@@ -881,7 +958,7 @@ async function checkAccountJourney(temporary) {
     // La prenotazione di una fascia, con il browser che ha fatto l'accesso.
     await checkBookingJourney(browser, mailDir);
     // Il pannello del titolare, con lo stesso browser dopo admin:grant.
-    await checkAdminJourney(browser, localConfig, mailDir);
+    await checkAdminJourney(browser, localConfig, mailDir, databaseFile);
   } finally {
     await stopServer(server);
   }

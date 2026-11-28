@@ -6,14 +6,15 @@ use FourStreet\Admin\AdminUrls;
 use FourStreet\View\Template;
 
 /**
- * La navigazione del pannello del titolare, in cima a ogni sua pagina (il layout la mette sopra l'occhiello):
- * Oggi, Calendario, Orari, Chiusure, Impostazioni. Sul telefono è una riga sola che scorre di lato, larga fino ai bordi
- * dello schermo (la voce tagliata al bordo dice che ce n'è un'altra); lo script porta in vista la voce corrente.
+ * La navigazione del pannello del titolare, in cima a ogni sua pagina (il layout la mette sopra l'occhiello; da lg a
+ * tutta larghezza, sopra il logo e il contenuto, dove le sei voci stanno in una riga):
+ * Oggi, Calendario, Orari, Chiusure, Disdette, Impostazioni. Sul telefono è una riga sola che scorre di lato, larga fino
+ * ai bordi dello schermo (la voce tagliata al bordo dice che ce n'è un'altra); lo script porta in vista la voce corrente.
  * La sezione corrente ha il filetto oro: aria-current="page" se la pagina è proprio quella del link, altrimenti
  * aria-current="true" (una pagina della sezione: un altro giorno, una settimana dell'orario, un modulo).
  *
  * @var Template $view
- * @var string $current la sezione: "day", "calendar", "schedule", "closures" oppure "settings"
+ * @var string $current la sezione: "day", "calendar", "schedule", "closures", "cancellations" oppure "settings"
  * @var bool|null $exact facoltativo: la pagina è proprio quella del link della sezione (predefinito true)
  */
 
@@ -22,6 +23,7 @@ $items = [
     'calendar' => ['Calendario', AdminUrls::CALENDAR],
     'schedule' => ['Orari', AdminUrls::SCHEDULE],
     'closures' => ['Chiusure', AdminUrls::CLOSURES],
+    'cancellations' => ['Disdette', AdminUrls::CANCELLATIONS],
     'settings' => ['Impostazioni', AdminUrls::SETTINGS],
 ];
 ?>

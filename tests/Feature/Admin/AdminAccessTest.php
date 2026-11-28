@@ -95,6 +95,8 @@ final class AdminAccessTest extends TestCase
             $browser->post('/gestione/orari/settimana/?da=2026-12-07'),
             $browser->get('/gestione/chiusure/'),
             $browser->post('/gestione/chiusure/'),
+            $browser->get('/gestione/disdette/'),
+            $browser->post('/gestione/disdette/'),
         ] as $response) {
             self::assertSame(404, $response->status);
             self::assertSame($missing->body, $response->body, 'La stessa pagina di un indirizzo che non esiste.');
@@ -117,6 +119,7 @@ final class AdminAccessTest extends TestCase
         yield 'la settimana tipo' => ['/gestione/orari/', '/account/accedi/?ritorno=/gestione/orari/'];
         yield 'una settimana' => ['/gestione/orari/settimana/?da=2026-12-07', '/account/accedi/?ritorno=/gestione/orari/settimana/%3Fda%3D2026-12-07'];
         yield 'le chiusure' => ['/gestione/chiusure/', '/account/accedi/?ritorno=/gestione/chiusure/'];
+        yield 'le disdette' => ['/gestione/disdette/', '/account/accedi/?ritorno=/gestione/disdette/'];
     }
 
     #[DataProvider('otherPanelPages')]
@@ -148,7 +151,7 @@ final class AdminAccessTest extends TestCase
         $browser = $this->fixture->browser();
         $this->fixture->logIn($browser, 'titolare@example.test');
 
-        foreach (['/gestione/', self::DAY, '/gestione/prenotazioni/nuova/?giorno=2026-12-07&fascia=07%3A00', '/gestione/calendario/', '/gestione/calendario/?mese=2026-12', '/gestione/impostazioni/'] as $uri) {
+        foreach (['/gestione/', self::DAY, '/gestione/prenotazioni/nuova/?giorno=2026-12-07&fascia=07%3A00', '/gestione/calendario/', '/gestione/calendario/?mese=2026-12', '/gestione/disdette/', '/gestione/impostazioni/'] as $uri) {
             $page = $browser->get($uri);
             self::assertSame(200, $page->status, $uri);
             self::assertSame('no-store', $page->header('Cache-Control'), $uri);

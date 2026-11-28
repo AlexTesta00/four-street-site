@@ -27,6 +27,9 @@ final readonly class BookingEmails
     public const string CALENDAR_FILE = 'prenotazione-4street.ics';
     public const string CALENDAR_TYPE = 'text/calendar; charset=utf-8; method=PUBLISH';
 
+    /** Il perché di una disdetta della palestra quando il giorno chiude, per cancellationByGym(). */
+    public const string DAY_CLOSED = 'Quel giorno la palestra resta chiusa.';
+
     public function __construct(
         private MailTemplates $templates,
         private Origin $origin,
@@ -98,6 +101,12 @@ final readonly class BookingEmails
                 'reason' => $reason,
             ]),
         );
+    }
+
+    /** Il perché di una disdetta della palestra quando la sua fascia sparisce dall'orario, per cancellationByGym(). */
+    public static function slotRemoved(SlotTime $time): string
+    {
+        return sprintf('Quel giorno la fascia delle %s non c\'è più.', $time);
     }
 
     /**
